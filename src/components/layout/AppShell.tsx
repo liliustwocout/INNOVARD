@@ -186,9 +186,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="relative mx-auto flex h-20 w-20 items-center justify-center">
             <div className="absolute inset-0 animate-spin rounded-full border-[3px] border-slate-100 border-t-indigo-600 border-r-sky-500" />
             <div className="innovard-spin-reverse absolute inset-2.5 rounded-full border-2 border-transparent border-b-indigo-400 border-l-sky-400" />
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-indigo-600 to-sky-500 text-xs font-extrabold tracking-wider text-white shadow-sm">
-              IN
-            </div>
+            <img
+              src="/logo.png"
+              alt="INNOVARD"
+              className="h-11 w-11 rounded-full object-cover shadow-sm ring-1 ring-indigo-100"
+            />
           </div>
 
           <span className="mt-5 inline-block rounded-full border border-indigo-200 bg-indigo-50 px-3 py-0.5 text-[10px] font-bold uppercase tracking-widest text-indigo-700">
@@ -264,13 +266,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* Brand & Team Switcher */}
       <div className="border-b border-slate-200/80 px-4 py-4">
         <div className="flex items-center justify-between gap-2">
-          <Link href="/overview" className="min-w-0">
-            <span className="block truncate text-base font-extrabold tracking-tight text-slate-900">
-              INNOVARD
-            </span>
-            <span className="block text-[11px] font-medium text-slate-500">
-              Team Hub · {currentTeam.code}
-            </span>
+          <Link href="/overview" className="flex min-w-0 items-center gap-2.5">
+            <img
+              src="/logo.png"
+              alt="INNOVARD"
+              className="h-9 w-9 shrink-0 rounded-xl object-cover shadow-xs ring-1 ring-slate-200/80"
+            />
+            <div className="min-w-0">
+              <span className="block truncate text-base font-extrabold tracking-tight text-slate-900">
+                INNOVARD
+              </span>
+              <span className="block text-[11px] font-medium text-slate-500">
+                Team Hub · {currentTeam.code}
+              </span>
+            </div>
           </Link>
 
           {isMobile && (
@@ -498,9 +507,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           >
             Menu
           </button>
-          <span className="text-sm font-extrabold tracking-tight text-slate-900">
-            INNOVARD · {currentTeam.name}
-          </span>
+          <Link href="/overview" className="flex items-center gap-2">
+            <img
+              src="/logo.png"
+              alt="INNOVARD"
+              className="h-7 w-7 rounded-lg object-cover shadow-2xs ring-1 ring-slate-200/80"
+            />
+            <span className="text-sm font-extrabold tracking-tight text-slate-900">
+              INNOVARD · {currentTeam.name}
+            </span>
+          </Link>
           <Link href="/profile">
             <UserAvatar
               src={currentUser.avatarUrl}

@@ -19,9 +19,11 @@ export default function Loading() {
         <div className="relative mx-auto flex h-20 w-20 items-center justify-center">
           <div className="absolute inset-0 animate-spin rounded-full border-[3px] border-slate-100 border-t-indigo-600 border-r-sky-500" />
           <div className="innovard-spin-reverse absolute inset-2.5 rounded-full border-2 border-transparent border-b-indigo-400 border-l-sky-400" />
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-indigo-600 to-sky-500 text-xs font-extrabold tracking-wider text-white shadow-sm">
-            IN
-          </div>
+          <img
+            src="/logo.png"
+            alt="INNOVARD"
+            className="h-11 w-11 rounded-full object-cover shadow-sm ring-1 ring-indigo-100"
+          />
         </div>
 
         <span className="mt-5 inline-block rounded-full border border-indigo-200 bg-indigo-50 px-3 py-0.5 text-[10px] font-bold uppercase tracking-widest text-indigo-700">

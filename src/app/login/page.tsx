@@ -43,9 +43,11 @@ export default function LoginPage() {
 
         <div className="relative z-10">
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/15 text-xs font-black tracking-tight text-white ring-1 ring-white/25 backdrop-blur-xs">
-              IN
-            </div>
+            <img
+              src="/logo.png"
+              alt="INNOVARD"
+              className="h-10 w-10 rounded-xl object-cover shadow-md ring-1 ring-white/25"
+            />
             <span className="text-2xl font-extrabold tracking-tight text-white">
               INNOVARD
             </span>
@@ -68,43 +70,59 @@ export default function LoginPage() {
 
       {/* Right Split Minimalist Sign-In Panel */}
       <main className="flex flex-col items-center justify-center bg-slate-50 px-6 py-12 sm:px-12">
-        <div className="w-full max-w-[380px] text-center">
-          <h2 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-[28px]">
-            Đăng nhập
-          </h2>
-          <p className="mt-2 text-sm text-slate-500">
-            Chào mừng trở lại! Vui lòng đăng nhập để tiếp tục
-          </p>
-
-          <button
-            type="button"
-            onClick={handleGoogleOAuth}
-            disabled={isLoadingOAuth}
-            className="mt-8 flex w-full cursor-pointer items-center justify-between rounded-xl border border-slate-200/90 bg-white px-4 py-3.5 text-sm font-semibold text-slate-800 shadow-xs transition hover:border-indigo-300 hover:bg-slate-50/80 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <span className="flex items-center gap-3">
-              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-50 text-xs font-black text-indigo-600 ring-1 ring-indigo-200/80">
-                G
-              </span>
-              <span>
-                {isLoadingOAuth
-                  ? 'Đang chuyển hướng tới Google...'
-                  : 'Tiếp tục với Google'}
-              </span>
+        <div className="w-full max-w-[400px]">
+          <div className="text-center">
+            <img
+              src="/logo.png"
+              alt="INNOVARD Logo"
+              className="mx-auto h-14 w-14 rounded-2xl object-cover shadow-lg shadow-indigo-600/15 ring-1 ring-slate-200"
+            />
+            <span className="mt-4 inline-block rounded-full border border-indigo-200 bg-indigo-50 px-3 py-0.5 text-[10px] font-bold uppercase tracking-widest text-indigo-700">
+              INNOVARD WORKSPACE HUB
             </span>
-            <span className="rounded-md bg-indigo-50 px-2 py-0.5 text-[11px] font-semibold text-indigo-600">
-              Google OAuth
-            </span>
-          </button>
+            <h2 className="mt-3 text-2xl font-extrabold tracking-tight text-slate-900 sm:text-[28px]">
+              Đăng nhập
+            </h2>
+            <p className="mt-1.5 text-sm text-slate-500">
+              Chọn tài khoản Google của bạn để tiếp tục vào không gian làm việc
+            </p>
+          </div>
 
-          <button
-            type="button"
-            onClick={handleGoogleOAuth}
-            disabled={isLoadingOAuth}
-            className="mt-3.5 w-full cursor-pointer rounded-xl bg-gradient-to-b from-indigo-500 to-indigo-600 px-4 py-3.5 text-sm font-semibold text-white shadow-md shadow-indigo-600/20 transition hover:from-indigo-600 hover:to-indigo-700 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isLoadingOAuth ? 'Đang chuyển hướng...' : 'Đăng nhập'}
-          </button>
+          <div className="mt-7 rounded-2xl border border-slate-200/90 bg-white p-5 shadow-sm">
+            <button
+              type="button"
+              onClick={handleGoogleOAuth}
+              disabled={isLoadingOAuth}
+              className="flex w-full cursor-pointer items-center justify-between rounded-xl border border-slate-200 bg-slate-50/70 px-4 py-3.5 text-sm font-semibold text-slate-800 transition hover:border-indigo-300 hover:bg-indigo-50/40 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <span className="flex items-center gap-3">
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-xs font-black text-indigo-600 shadow-2xs ring-1 ring-slate-200">
+                  G
+                </span>
+                <span>
+                  {isLoadingOAuth
+                    ? 'Đang mở chọn tài khoản Google...'
+                    : 'Tiếp tục với Google'}
+                </span>
+              </span>
+              <span className="rounded-md bg-indigo-50 px-2 py-0.5 text-[11px] font-semibold text-indigo-600">
+                Google OAuth
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleGoogleOAuth}
+              disabled={isLoadingOAuth}
+              className="mt-3 w-full cursor-pointer rounded-xl bg-gradient-to-b from-indigo-500 to-indigo-600 px-4 py-3.5 text-sm font-semibold text-white shadow-md shadow-indigo-600/20 transition hover:from-indigo-600 hover:to-indigo-700 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isLoadingOAuth ? 'Đang chuyển hướng...' : 'Đăng nhập ngay'}
+            </button>
+
+            <p className="mt-3.5 border-t border-slate-100 pt-3 text-center text-[11px] leading-relaxed text-slate-400">
+              Hệ thống tự động đồng bộ tên, ảnh đại diện Google và phân quyền đội nhóm của bạn.
+            </p>
+          </div>
 
           {authError && (
             <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-left text-xs leading-relaxed text-rose-700">
