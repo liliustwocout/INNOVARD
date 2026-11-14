@@ -164,17 +164,23 @@ export function SubmissionsView() {
   );
 
   const filteredStandups = useMemo(() => {
+    if (!currentUser) return [];
+    if (!isAdmin) {
+      return standups
+        .filter((s) => s.userId === currentUser.id)
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    }
     return standups
       .filter((s) =>
-        historyScope === 'all_teams' && isAdmin
+        historyScope === 'all_teams'
           ? true
           : Boolean(currentTeam.id) && s.teamId === currentTeam.id
       )
       .filter((s) =>
-        historyScope === 'mine' ? s.userId === currentUser?.id : true
+        historyScope === 'mine' ? s.userId === currentUser.id : true
       )
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  }, [standups, currentTeam.id, historyScope, currentUser?.id, isAdmin]);
+  }, [standups, currentTeam.id, historyScope, currentUser, isAdmin]);
 
   const filteredReports = useMemo(() => {
     return teamReports
@@ -694,34 +700,36 @@ export function SubmissionsView() {
                   Lịch sử nộp Daily Standup
                 </h3>
                 <p className="text-xs text-slate-500">
-                  Theo dõi lại các báo cáo hàng ngày đã gửi
+                  {isAdmin
+                    ? 'Theo dõi lại các báo cáo hàng ngày đã gửi'
+                    : 'Chỉ hiển thị lịch sử báo cáo Daily Standup của riêng bạn'}
                 </p>
               </div>
 
-              <div className="inline-flex flex-wrap rounded-xl border border-slate-200 bg-slate-50 p-1">
-                <button
-                  type="button"
-                  onClick={() => setHistoryScope('mine')}
-                  className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
-                    historyScope === 'mine'
-                      ? 'bg-white text-indigo-700 shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  Bài nộp của tôi
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setHistoryScope('team')}
-                  className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
-                    historyScope === 'team'
-                      ? 'bg-white text-indigo-700 shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  {currentTeam.id ? `Cả đội (${currentTeam.name})` : 'Cả đội'}
-                </button>
-                {isAdmin && (
+              {isAdmin ? (
+                <div className="inline-flex flex-wrap rounded-xl border border-slate-200 bg-slate-50 p-1">
+                  <button
+                    type="button"
+                    onClick={() => setHistoryScope('mine')}
+                    className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                      historyScope === 'mine'
+                        ? 'bg-white text-indigo-700 shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    Bài nộp của tôi
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setHistoryScope('team')}
+                    className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                      historyScope === 'team'
+                        ? 'bg-white text-indigo-700 shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    {currentTeam.id ? `Cả đội (${currentTeam.name})` : 'Cả đội'}
+                  </button>
                   <button
                     type="button"
                     onClick={() => setHistoryScope('all_teams')}
@@ -733,8 +741,12 @@ export function SubmissionsView() {
                   >
                     Tất cả các đội
                   </button>
-                )}
-              </div>
+                </div>
+              ) : (
+                <span className="inline-flex items-center rounded-xl border border-indigo-100 bg-indigo-50/70 px-3 py-1.5 text-xs font-semibold text-indigo-700">
+                  Bài nộp của tôi ({filteredStandups.length})
+                </span>
+              )}
             </div>
 
             <div className="mt-5 space-y-3">
