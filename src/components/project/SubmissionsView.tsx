@@ -51,7 +51,7 @@ export function SubmissionsView() {
   const [todayPlan, setTodayPlan] = useState('');
   const [standupBlockers, setStandupBlockers] = useState('');
   const [historyScope, setHistoryScope] = useState<'mine' | 'team' | 'all_teams'>(
-    isAdmin ? 'all_teams' : 'mine'
+    isAdmin ? 'all_teams' : currentTeam.id ? 'team' : 'mine'
   );
   const [reportScope, setReportScope] = useState<'team' | 'all_teams'>(
     isAdmin ? 'all_teams' : 'team'
@@ -119,11 +119,11 @@ export function SubmissionsView() {
       setHistoryScope('all_teams');
       setReportScope('all_teams');
     } else {
-      setHistoryScope('mine');
+      setHistoryScope(currentTeam.id ? 'team' : 'mine');
       setReportScope('team');
       setSelectedHistoryUserId('all');
     }
-  }, [isAdmin]);
+  }, [isAdmin, currentTeam.id]);
 
   useEffect(() => {
     setDraftStartTime(systemConfig.standupStartTime);
@@ -180,22 +180,34 @@ export function SubmissionsView() {
     [teams]
   );
 
+  const historyFilterUsers = useMemo(
+    () =>
+      isAdmin
+        ? users
+        : currentTeam.id
+          ? users.filter((u) => u.teamId === currentTeam.id)
+          : currentUser
+            ? [currentUser]
+            : [],
+    [isAdmin, users, currentTeam.id, currentUser]
+  );
+
   const filteredStandups = useMemo(() => {
     if (!currentUser) return [];
-    if (!isAdmin) {
-      return standups
-        .filter((s) => s.userId === currentUser.id)
-        .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-    }
     return standups
-      .filter((s) =>
-        historyScope === 'all_teams'
+      .filter((s) => {
+        if (historyScope === 'mine') {
+          return s.userId === currentUser.id;
+        }
+        if (historyScope === 'team') {
+          return Boolean(currentTeam.id) && s.teamId === currentTeam.id;
+        }
+        return isAdmin
           ? true
-          : Boolean(currentTeam.id) && s.teamId === currentTeam.id
-      )
-      .filter((s) =>
-        historyScope === 'mine' ? s.userId === currentUser.id : true
-      )
+          : Boolean(currentTeam.id)
+            ? s.teamId === currentTeam.id
+            : s.userId === currentUser.id;
+      })
       .filter((s) =>
         selectedHistoryUserId === 'all' ? true : s.userId === selectedHistoryUserId
       )
@@ -728,25 +740,30 @@ export function SubmissionsView() {
                 </h3>
                 <p className="text-xs text-slate-500">
                   {isAdmin
-                    ? 'Theo dõi lại các báo cáo hàng ngày đã gửi'
-                    : 'Chỉ hiển thị lịch sử báo cáo Daily Standup của riêng bạn'}
+                    ? 'Theo dõi lại các báo cáo hàng ngày đã gửi của toàn bộ các đội'
+                    : currentTeam.id
+                      ? `Xem lịch sử báo cáo Daily Standup của bạn và cả đội ${currentTeam.name}`
+                      : 'Theo dõi lịch sử báo cáo Daily Standup của bạn'}
                 </p>
               </div>
 
-              {isAdmin ? (
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className="inline-flex flex-wrap rounded-xl border border-slate-200 bg-slate-50 p-1">
-                    <button
-                      type="button"
-                      onClick={() => setHistoryScope('mine')}
-                      className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
-                        historyScope === 'mine'
-                          ? 'bg-white text-indigo-700 shadow-xs'
-                          : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      Bài nộp của tôi
-                    </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="inline-flex flex-wrap rounded-xl border border-slate-200 bg-slate-50 p-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setHistoryScope('mine');
+                      setSelectedHistoryUserId('all');
+                    }}
+                    className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                      historyScope === 'mine'
+                        ? 'bg-white text-indigo-700 shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    Bài nộp của tôi
+                  </button>
+                  {(isAdmin || Boolean(currentTeam.id)) && (
                     <button
                       type="button"
                       onClick={() => setHistoryScope('team')}
@@ -758,6 +775,8 @@ export function SubmissionsView() {
                     >
                       {currentTeam.id ? `Cả đội (${currentTeam.name})` : 'Cả đội'}
                     </button>
+                  )}
+                  {isAdmin && (
                     <button
                       type="button"
                       onClick={() => setHistoryScope('all_teams')}
@@ -769,32 +788,34 @@ export function SubmissionsView() {
                     >
                       Tất cả các đội
                     </button>
-                  </div>
+                  )}
+                </div>
 
+                {(isAdmin || historyFilterUsers.length > 1) && (
                   <select
                     value={selectedHistoryUserId}
                     onChange={(e) => {
                       const val = e.target.value;
                       setSelectedHistoryUserId(val);
                       if (val !== 'all' && historyScope === 'mine') {
-                        setHistoryScope('all_teams');
+                        setHistoryScope(isAdmin ? 'all_teams' : 'team');
                       }
                     }}
                     className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:border-indigo-500"
                   >
-                    <option value="all">Tất cả thành viên ({users.length})</option>
-                    {users.map((u) => (
+                    <option value="all">
+                      {isAdmin
+                        ? `Tất cả thành viên (${historyFilterUsers.length})`
+                        : `Cả đội (${historyFilterUsers.length} thành viên)`}
+                    </option>
+                    {historyFilterUsers.map((u) => (
                       <option key={u.id} value={u.id}>
                         {u.name} ({u.email})
                       </option>
                     ))}
                   </select>
-                </div>
-              ) : (
-                <span className="inline-flex items-center rounded-xl border border-indigo-100 bg-indigo-50/70 px-3 py-1.5 text-xs font-semibold text-indigo-700">
-                  Bài nộp của tôi ({filteredStandups.length})
-                </span>
-              )}
+                )}
+              </div>
             </div>
 
             <div className="mt-5 space-y-3">
@@ -825,7 +846,12 @@ export function SubmissionsView() {
                               <p className="text-sm font-bold text-slate-900">
                                 {item.userName}
                               </p>
-                              {isAdmin && itemTeam && (
+                              {item.userId === currentUser?.id && (
+                                <span className="rounded-md border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold text-indigo-700">
+                                  Của tôi
+                                </span>
+                              )}
+                              {(isAdmin || historyScope === 'team') && itemTeam && (
                                 <span className="rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-600">
                                   {itemTeam.name}
                                 </span>

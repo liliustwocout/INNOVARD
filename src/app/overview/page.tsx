@@ -6,18 +6,120 @@ import { useApp } from '@/context/AppContext';
 import { UserAvatar } from '@/components/ui/UserAvatar';
 import { triggerOnboardingTour } from '@/components/onboarding/OnboardingTour';
 import {
-  findNextStandupDateISO,
+  addDaysISO,
   formatLiveCountdown,
   formatVietnameseDate,
   formatVietnameseWeekdayDayMonth,
   getTodayISO,
   isStandupScheduledForDate,
 } from '@/lib/date-utils';
+import type { CalendarEvent } from '@/types/innovard';
 
 const ROLE_LABELS: Record<string, string> = {
   admin: 'Admin',
   member: 'Thành viên',
 };
+
+const EVENT_CATEGORY_LABELS: Record<string, { label: string; badgeClass: string }> = {
+  standup: {
+    label: 'Daily Standup',
+    badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  },
+  coaching: {
+    label: 'Coaching 1-1',
+    badgeClass: 'bg-violet-50 text-violet-700 border-violet-200',
+  },
+  mentoring: {
+    label: 'Mentoring 1-1',
+    badgeClass: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+  },
+  general: {
+    label: 'Sự kiện chung',
+    badgeClass: 'bg-sky-50 text-sky-700 border-sky-200',
+  },
+  report: {
+    label: 'Báo cáo tuần',
+    badgeClass: 'bg-blue-50 text-blue-700 border-blue-200',
+  },
+  gate: {
+    label: 'Hạn gate',
+    badgeClass: 'bg-rose-50 text-rose-700 border-rose-200',
+  },
+  demoday: {
+    label: 'Demo Day',
+    badgeClass: 'bg-teal-50 text-teal-700 border-teal-200',
+  },
+  topic: {
+    label: 'Chốt đề tài',
+    badgeClass: 'bg-amber-50 text-amber-700 border-amber-200',
+  },
+  team_meeting: {
+    label: 'Họp nhóm',
+    badgeClass: 'bg-orange-50 text-orange-700 border-orange-200',
+  },
+};
+
+function getMondayOfWeekISO(dateISO: string): string {
+  const target = new Date(`${dateISO}T00:00:00`);
+  if (Number.isNaN(target.getTime())) return dateISO;
+  const offsetToMonday = (target.getDay() + 6) % 7;
+  return addDaysISO(dateISO, -offsetToMonday);
+}
+
+function parseOverviewEventMeta(ev: CalendarEvent): {
+  badgeLabel: string;
+  badgeClass: string;
+  endTime: string;
+  cleanDescription: string;
+} {
+  let desc = ev.description ?? '';
+  let explicitCategory: string | null = null;
+  let explicitEndTime: string | null = null;
+
+  const catMatch = /^\[(?:Loại|CAT):\s*([a-z_]+)\]\s*/i.exec(desc);
+  if (catMatch) {
+    explicitCategory = catMatch[1].toLowerCase();
+    desc = desc.slice(catMatch[0].length);
+  }
+
+  const endMatch = /^\[(?:Kết thúc|END):\s*(\d{2}:\d{2})\]\s*/i.exec(desc);
+  if (endMatch) {
+    explicitEndTime = endMatch[1];
+    desc = desc.slice(endMatch[0].length);
+  }
+
+  let categoryKey = explicitCategory ?? '';
+  if (!categoryKey || !EVENT_CATEGORY_LABELS[categoryKey]) {
+    const hay = `${ev.title} ${desc}`.toLowerCase();
+    if (hay.includes('standup')) categoryKey = 'standup';
+    else if (hay.includes('coaching')) categoryKey = 'coaching';
+    else if (hay.includes('mentor')) categoryKey = 'mentoring';
+    else if (hay.includes('demo day') || hay.includes('demoday')) categoryKey = 'demoday';
+    else if (hay.includes('chốt đề tài') || hay.includes('đề tài')) categoryKey = 'topic';
+    else if (hay.includes('gate')) categoryKey = 'gate';
+    else if (hay.includes('báo cáo') || hay.includes('report')) categoryKey = 'report';
+    else if (hay.includes('workshop') || hay.includes('office hour') || ev.teamId === null) {
+      categoryKey = ev.type === 'deadline' ? 'gate' : 'general';
+    } else {
+      categoryKey = ev.type === 'deadline' ? 'gate' : 'team_meeting';
+    }
+  }
+
+  const meta = EVENT_CATEGORY_LABELS[categoryKey] ?? {
+    label: ev.type === 'deadline' ? 'Deadline' : 'Lịch sự kiện',
+    badgeClass:
+      ev.type === 'deadline'
+        ? 'bg-rose-50 text-rose-700 border-rose-200'
+        : 'bg-sky-50 text-sky-700 border-sky-200',
+  };
+
+  return {
+    badgeLabel: meta.label,
+    badgeClass: meta.badgeClass,
+    endTime: explicitEndTime ?? '',
+    cleanDescription: desc.trim(),
+  };
+}
 
 function extractRepoShortName(url: string): string {
   try {
@@ -41,6 +143,7 @@ export default function OverviewPage() {
     systemConfig,
   } = useApp();
   const [nowMs, setNowMs] = useState<number>(() => Date.now());
+  const [scheduleFilter, setScheduleFilter] = useState<'all' | 'deadline' | 'event'>('all');
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -82,67 +185,146 @@ export default function OverviewPage() {
     );
   }, [tasks, currentUser, currentTeam.id]);
 
-  const hasSubmittedStandupToday = useMemo(() => {
-    if (!currentUser || !currentTeam.id) return false;
-    return standups.some(
-      (s) =>
-        s.userId === currentUser.id &&
-        s.teamId === currentTeam.id &&
-        s.date === todayISO
-    );
-  }, [standups, currentUser, currentTeam.id, todayISO]);
+  const weekStartISO = useMemo(() => getMondayOfWeekISO(todayISO), [todayISO]);
+  const weekEndISO = useMemo(() => addDaysISO(weekStartISO, 6), [weekStartISO]);
+  const horizonEndISO = useMemo(() => {
+    const sevenDaysAhead = addDaysISO(todayISO, 6);
+    return sevenDaysAhead > weekEndISO ? sevenDaysAhead : weekEndISO;
+  }, [todayISO, weekEndISO]);
 
-  // Danh sách Deadline sắp đến (gồm hạn Daily Standup hôm nay + các deadline sự kiện)
-  const deadlineRows = useMemo(() => {
-    const calendarDeadlines = events
+  // Danh sách Deadline sắp đến & Lịch sự kiện cả tuần (Daily Standup cả tuần + mọi Deadline & Sự kiện trên lịch)
+  const scheduleRows = useMemo(() => {
+    const teamStandupRows: Array<{
+      id: string;
+      kind: 'standup' | 'deadline' | 'event';
+      badgeLabel: string;
+      badgeClass: string;
+      title: string;
+      subtitle: string;
+      description?: string;
+      scopeLabel: string;
+      date: string;
+      time: string;
+      completed: boolean;
+      completedText: string;
+      isPastInWeek: boolean;
+      href: string;
+      externalLink?: string;
+    }> = [];
+
+    if (currentTeam.id) {
+      let cursor = todayISO;
+      while (cursor <= horizonEndISO) {
+        if (isStandupScheduledForDate(cursor, systemConfig)) {
+          const submittedByMe = currentUser
+            ? standups.some(
+                (s) =>
+                  s.userId === currentUser.id &&
+                  s.teamId === currentTeam.id &&
+                  s.date === cursor
+              )
+            : false;
+          const submittedCount = standups.filter(
+            (s) => s.teamId === currentTeam.id && s.date === cursor
+          ).length;
+
+          teamStandupRows.push({
+            id: `daily-standup-${cursor}`,
+            kind: 'standup',
+            badgeLabel: 'Daily Standup',
+            badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+            title:
+              cursor === todayISO
+                ? `${systemConfig.standupDeadlineLabel} hôm nay`
+                : `${systemConfig.standupDeadlineLabel} (${formatVietnameseWeekdayDayMonth(cursor)})`,
+            subtitle: `Khung giờ ${systemConfig.standupStartTime} – ${systemConfig.standupDeadlineTime} · ${formatVietnameseWeekdayDayMonth(cursor)}${
+              teamMembers.length > 0
+                ? ` · ${submittedCount}/${teamMembers.length} thành viên đã nộp`
+                : ''
+            }`,
+            scopeLabel: currentTeam.name,
+            date: cursor,
+            time: systemConfig.standupDeadlineTime,
+            completed: submittedByMe,
+            completedText: 'Bạn đã nộp',
+            isPastInWeek: false,
+            href: '/project/submissions',
+          });
+        }
+        cursor = addDaysISO(cursor, 1);
+      }
+    }
+
+    const calendarRows = events
       .filter(
         (ev) =>
-          ev.type === 'deadline' &&
+          ev.date >= weekStartISO &&
           (ev.teamId === null || (Boolean(currentTeam.id) && ev.teamId === currentTeam.id))
       )
-      .sort((a, b) => a.date.localeCompare(b.date));
+      .map((ev) => {
+        const meta = parseOverviewEventMeta(ev);
+        const timeRange = meta.endTime ? `${ev.time} – ${meta.endTime}` : ev.time;
+        const scopeLabel = ev.teamId ? currentTeam.name : 'Toàn chương trình';
+        const locationSuffix = ev.location?.trim() ? ` · ${ev.location.trim()}` : '';
+        return {
+          id: ev.id,
+          kind: (ev.type === 'deadline' ? 'deadline' : 'event') as 'deadline' | 'event',
+          badgeLabel: meta.badgeLabel,
+          badgeClass: meta.badgeClass,
+          title: ev.title,
+          subtitle: `${scopeLabel} · ${timeRange || 'Cả ngày'} · ${formatVietnameseWeekdayDayMonth(ev.date)}${locationSuffix}`,
+          description: meta.cleanDescription || undefined,
+          scopeLabel,
+          date: ev.date,
+          time: ev.time || '23:59',
+          completed: false,
+          completedText: 'Đã hoàn thành',
+          isPastInWeek: ev.date < todayISO,
+          href: '/calendar',
+          externalLink: ev.meetingLink || undefined,
+        };
+      });
 
-    const scheduledToday = isStandupScheduledForDate(todayISO, systemConfig);
-    const nextStandupDate = scheduledToday
-      ? todayISO
-      : findNextStandupDateISO(todayISO, systemConfig);
+    const combined = [...teamStandupRows, ...calendarRows];
 
-    const standupRow = nextStandupDate
-      ? {
-          id: 'daily-standup-next',
-          title:
-            nextStandupDate > todayISO
-              ? `${systemConfig.standupDeadlineLabel} (Bắt đầu ${formatVietnameseDate(nextStandupDate)})`
-              : systemConfig.standupDeadlineLabel,
-          subtitle: `Khung giờ ${systemConfig.standupStartTime} – ${systemConfig.standupDeadlineTime} · ${formatVietnameseWeekdayDayMonth(nextStandupDate)}`,
-          date: nextStandupDate,
-          time: systemConfig.standupDeadlineTime,
-          completed: nextStandupDate === todayISO ? hasSubmittedStandupToday : false,
-          completedText: 'Đã nộp',
-          href: '/project/submissions',
-        }
-      : null;
-
-    const eventRows = calendarDeadlines.map((ev) => ({
-      id: ev.id,
-      title: ev.title,
-      subtitle: `${ev.teamId ? currentTeam.name : 'Toàn chương trình'} · ${ev.time} ${formatVietnameseWeekdayDayMonth(ev.date)}`,
-      date: ev.date,
-      time: ev.time || '23:59',
-      completed: false,
-      completedText: 'Đã hoàn thành',
-      href: '/calendar',
-    }));
-
-    return currentTeam.id && standupRow ? [standupRow, ...eventRows] : eventRows;
+    return combined.sort((a, b) => {
+      if (a.isPastInWeek !== b.isPastInWeek) {
+        return a.isPastInWeek ? 1 : -1;
+      }
+      const keyA = `${a.date} ${a.time}`;
+      const keyB = `${b.date} ${b.time}`;
+      return keyA.localeCompare(keyB);
+    });
   }, [
     events,
+    standups,
+    currentUser,
     currentTeam.id,
     currentTeam.name,
+    teamMembers.length,
     todayISO,
-    hasSubmittedStandupToday,
+    weekStartISO,
+    horizonEndISO,
     systemConfig,
   ]);
+
+  const filteredScheduleRows = useMemo(() => {
+    if (scheduleFilter === 'all') return scheduleRows;
+    if (scheduleFilter === 'deadline') {
+      return scheduleRows.filter((r) => r.kind === 'standup' || r.kind === 'deadline');
+    }
+    return scheduleRows.filter((r) => r.kind === 'event');
+  }, [scheduleRows, scheduleFilter]);
+
+  const deadlineCount = useMemo(
+    () => scheduleRows.filter((r) => r.kind === 'standup' || r.kind === 'deadline').length,
+    [scheduleRows]
+  );
+
+  const eventCount = useMemo(
+    () => scheduleRows.filter((r) => r.kind === 'event').length,
+    [scheduleRows]
+  );
 
   const teamCodeBadge = useMemo(() => {
     if (!currentTeam.id) return '--';
@@ -229,16 +411,63 @@ export default function OverviewPage() {
         </Link>
       </section>
 
-      {/* Tầng 3: Deadline sắp đến (Full-width với đồng hồ đếm ngược thời gian thực) */}
+      {/* Tầng 3: Deadline sắp đến & Lịch sự kiện cả tuần (Full-width với đồng hồ đếm ngược thời gian thực) */}
       <section
         data-tour="overview-deadlines"
         className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-xs"
       >
-        <div className="flex flex-wrap items-center justify-between gap-2 pb-3">
-          <h2 className="text-base font-bold text-slate-900">
-            Deadline sắp đến
-          </h2>
-          <div className="flex items-center gap-3">
+        <div className="flex flex-col gap-3 border-b border-slate-100 pb-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-base font-bold text-slate-900">
+                Deadline sắp đến &amp; Lịch sự kiện cả tuần
+              </h2>
+              <span className="rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-0.5 text-[11px] font-semibold text-indigo-700">
+                Tuần {formatVietnameseDate(weekStartISO)} – {formatVietnameseDate(weekEndISO)}
+              </span>
+            </div>
+            <p className="mt-1 text-xs text-slate-500">
+              Hiển thị toàn bộ lịch Daily Standup, hạn nộp (Deadline) và lịch sự kiện/buổi họp trong tuần.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1">
+              <button
+                type="button"
+                onClick={() => setScheduleFilter('all')}
+                className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
+                  scheduleFilter === 'all'
+                    ? 'bg-white text-indigo-700 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Tất cả ({scheduleRows.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setScheduleFilter('deadline')}
+                className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
+                  scheduleFilter === 'deadline'
+                    ? 'bg-white text-indigo-700 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Deadline &amp; Standup ({deadlineCount})
+              </button>
+              <button
+                type="button"
+                onClick={() => setScheduleFilter('event')}
+                className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
+                  scheduleFilter === 'event'
+                    ? 'bg-white text-indigo-700 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Lịch sự kiện ({eventCount})
+              </button>
+            </div>
+
             {isAdmin && (
               <Link
                 href="/admin"
@@ -251,18 +480,18 @@ export default function OverviewPage() {
               href="/calendar"
               className="text-xs font-semibold text-indigo-600 hover:underline"
             >
-              Xem lịch sự kiện
+              Mở trang Lịch
             </Link>
           </div>
         </div>
 
         <div className="divide-y divide-slate-100">
-          {deadlineRows.length === 0 ? (
-            <p className="py-4 text-xs text-slate-500">
-              Chưa có deadline nào sắp đến. Hãy chọn đội tại trang Đội của tôi để theo dõi hạn nộp nhóm.
+          {filteredScheduleRows.length === 0 ? (
+            <p className="py-6 text-xs text-slate-500">
+              Chưa có deadline hay lịch sự kiện nào trong tuần cho bộ lọc hiện tại.
             </p>
           ) : (
-            deadlineRows.map((row) => {
+            filteredScheduleRows.map((row) => {
               const countdown = formatLiveCountdown(row.date, row.time, nowMs);
               const countdownColor =
                 countdown.tone === 'urgent'
@@ -274,32 +503,64 @@ export default function OverviewPage() {
                   : 'text-slate-600';
 
               return (
-                <Link
+                <div
                   key={row.id}
-                  href={row.href}
-                  className="flex flex-col gap-2 py-4 transition hover:bg-slate-50/70 sm:flex-row sm:items-center sm:justify-between sm:px-2 sm:rounded-xl"
+                  className={`flex flex-col gap-2 py-4 transition hover:bg-slate-50/70 sm:flex-row sm:items-center sm:justify-between sm:rounded-xl sm:px-2 ${
+                    row.isPastInWeek ? 'opacity-70' : ''
+                  }`}
                 >
-                  <div>
-                    <p className="text-sm font-semibold text-slate-900">
-                      {row.title}
-                    </p>
-                    <p className="mt-0.5 text-xs text-slate-500">{row.subtitle}</p>
-                  </div>
+                  <Link href={row.href} className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span
+                        className={`rounded-md border px-2 py-0.5 text-[10px] font-bold ${row.badgeClass}`}
+                      >
+                        {row.badgeLabel}
+                      </span>
+                      <p className="text-sm font-semibold text-slate-900">
+                        {row.title}
+                      </p>
+                      {row.date === todayISO && (
+                        <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">
+                          Hôm nay
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-1 text-xs text-slate-500">{row.subtitle}</p>
+                    {row.description && (
+                      <p className="mt-1 line-clamp-1 text-xs text-slate-600">
+                        {row.description}
+                      </p>
+                    )}
+                  </Link>
 
-                  <div className="shrink-0 text-left sm:text-right">
+                  <div className="flex shrink-0 items-center gap-3 text-left sm:text-right">
+                    {row.externalLink && (
+                      <a
+                        href={row.externalLink}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-[11px] font-semibold text-indigo-700 transition hover:bg-indigo-100"
+                      >
+                        Mở liên kết
+                      </a>
+                    )}
                     {row.completed ? (
-                      <span className="text-xs font-bold text-emerald-600">
+                      <span className="rounded-lg bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">
                         {row.completedText}
                       </span>
                     ) : (
                       <span
                         className={`font-mono text-xs font-bold tabular-nums ${countdownColor}`}
                       >
-                        {countdown.text}
+                        {row.isPastInWeek
+                          ? 'Đã diễn ra trong tuần'
+                          : row.kind === 'event' && countdown.tone === 'past'
+                            ? 'Đã diễn ra'
+                            : countdown.text}
                       </span>
                     )}
                   </div>
-                </Link>
+                </div>
               );
             })
           )}

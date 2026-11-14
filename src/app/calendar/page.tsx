@@ -1151,12 +1151,7 @@ export default function CalendarPage() {
             </div>
 
             <div className="mt-4 space-y-2.5">
-              {!isAdmin && (
-                <p className="rounded-xl border border-slate-200/80 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-                  Thành viên chỉ xem được nội dung Daily Standup của chính mình.
-                </p>
-              )}
-              {(isAdmin ? teamMembers : currentUser ? [currentUser] : []).map((member) => {
+              {teamMembers.map((member) => {
                 const entry = selectedStandupList.find((s) => s.userId === member.id);
                 return (
                   <div
