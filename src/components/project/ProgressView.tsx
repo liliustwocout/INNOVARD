@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useApp } from '@/context/AppContext';
 import { UserAvatar } from '@/components/ui/UserAvatar';
@@ -43,8 +43,20 @@ export function ProgressView() {
     deleteTask,
   } = useApp();
 
-  const [viewScope, setViewScope] = useState<'mine' | 'team' | 'all_teams'>('mine');
+  const [viewScope, setViewScope] = useState<'mine' | 'team' | 'all_teams'>(
+    isAdmin ? 'all_teams' : 'mine'
+  );
+  const [userFilter, setUserFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | MemberTask['status']>('all');
+
+  useEffect(() => {
+    if (isAdmin) {
+      setViewScope('all_teams');
+    } else {
+      setViewScope('mine');
+      setUserFilter('all');
+    }
+  }, [isAdmin]);
   const [showNewTask, setShowNewTask] = useState(false);
 
   const [title, setTitle] = useState('');
@@ -68,31 +80,43 @@ export function ProgressView() {
 
   const scopedTasks = useMemo(() => {
     if (!currentUser) return [];
+    let base: MemberTask[] = [];
     if (isAdmin && viewScope === 'all_teams') {
-      return tasks;
+      base = tasks;
+    } else if (!currentTeam.id) {
+      return [];
+    } else if (isAdmin && viewScope === 'team') {
+      base = tasks.filter((t) => t.teamId === currentTeam.id);
+    } else {
+      base = tasks.filter(
+        (t) => t.userId === currentUser.id && t.teamId === currentTeam.id
+      );
     }
-    if (!currentTeam.id) return [];
-    if (isAdmin && viewScope === 'team') {
-      return tasks.filter((t) => t.teamId === currentTeam.id);
+    if (isAdmin && userFilter !== 'all') {
+      return base.filter((t) => t.userId === userFilter);
     }
-    return tasks.filter(
-      (t) => t.userId === currentUser.id && t.teamId === currentTeam.id
-    );
-  }, [tasks, currentUser, currentTeam.id, isAdmin, viewScope]);
+    return base;
+  }, [tasks, currentUser, currentTeam.id, isAdmin, viewScope, userFilter]);
 
   const scopedStandupCount = useMemo(() => {
     if (!currentUser) return 0;
+    let base = standups;
     if (isAdmin && viewScope === 'all_teams') {
-      return standups.length;
+      base = standups;
+    } else if (!currentTeam.id) {
+      return 0;
+    } else if (isAdmin && viewScope === 'team') {
+      base = standups.filter((s) => s.teamId === currentTeam.id);
+    } else {
+      base = standups.filter(
+        (s) => s.userId === currentUser.id && s.teamId === currentTeam.id
+      );
     }
-    if (!currentTeam.id) return 0;
-    if (isAdmin && viewScope === 'team') {
-      return standups.filter((s) => s.teamId === currentTeam.id).length;
+    if (isAdmin && userFilter !== 'all') {
+      return base.filter((s) => s.userId === userFilter).length;
     }
-    return standups.filter(
-      (s) => s.userId === currentUser.id && s.teamId === currentTeam.id
-    ).length;
-  }, [standups, currentUser, currentTeam.id, isAdmin, viewScope]);
+    return base.length;
+  }, [standups, currentUser, currentTeam.id, isAdmin, viewScope, userFilter]);
 
   const filteredTasks = useMemo(() => {
     return scopedTasks.filter(
@@ -266,40 +290,61 @@ export function ProgressView() {
         </div>
 
         {isAdmin && (
-          <div className="mt-4 inline-flex flex-wrap rounded-xl border border-slate-200 bg-slate-50 p-1">
-            <button
-              type="button"
-              onClick={() => setViewScope('mine')}
-              className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
-                viewScope === 'mine'
-                  ? 'bg-white text-indigo-700 shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <div className="inline-flex flex-wrap rounded-xl border border-slate-200 bg-slate-50 p-1">
+              <button
+                type="button"
+                onClick={() => setViewScope('mine')}
+                className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                  viewScope === 'mine'
+                    ? 'bg-white text-indigo-700 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Chỉ công việc của tôi
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewScope('team')}
+                className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                  viewScope === 'team'
+                    ? 'bg-white text-indigo-700 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Tất cả thành viên đội
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewScope('all_teams')}
+                className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                  viewScope === 'all_teams'
+                    ? 'bg-white text-indigo-700 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Tất cả các đội
+              </button>
+            </div>
+
+            <select
+              value={userFilter}
+              onChange={(e) => {
+                const val = e.target.value;
+                setUserFilter(val);
+                if (val !== 'all' && viewScope === 'mine') {
+                  setViewScope('all_teams');
+                }
+              }}
+              className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:border-indigo-500"
             >
-              Chỉ công việc của tôi
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewScope('team')}
-              className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
-                viewScope === 'team'
-                  ? 'bg-white text-indigo-700 shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Tất cả thành viên đội
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewScope('all_teams')}
-              className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
-                viewScope === 'all_teams'
-                  ? 'bg-white text-indigo-700 shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Tất cả các đội
-            </button>
+              <option value="all">Tất cả thành viên ({users.length})</option>
+              {users.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.name} ({u.email})
+                </option>
+              ))}
+            </select>
           </div>
         )}
 

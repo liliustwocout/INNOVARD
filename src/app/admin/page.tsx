@@ -12,7 +12,12 @@ import {
   STANDUP_WEEKDAY_OPTIONS,
 } from '@/lib/date-utils';
 import { DEFAULT_SYSTEM_CONFIG, isAdminEmail } from '@/lib/supabase-mappers';
-import type { ActivityLogType, Team, TeamRole } from '@/types/innovard';
+import type {
+  ActivityLogItem,
+  ActivityLogType,
+  Team,
+  TeamRole,
+} from '@/types/innovard';
 
 const LOG_TYPE_META: Record<
   ActivityLogType,
@@ -44,6 +49,21 @@ const LOG_TYPE_META: Record<
   },
 };
 
+const TASK_STATUS_META = {
+  todo: { label: 'Cần làm', badgeClass: 'bg-slate-100 text-slate-700' },
+  in_progress: { label: 'Đang làm', badgeClass: 'bg-indigo-50 text-indigo-700' },
+  done: { label: 'Hoàn thành', badgeClass: 'bg-emerald-50 text-emerald-700' },
+} as const;
+
+const TASK_PRIORITY_META = {
+  high: { label: 'Cao', badgeClass: 'bg-rose-50 text-rose-700 border-rose-200' },
+  medium: {
+    label: 'Trung bình',
+    badgeClass: 'bg-amber-50 text-amber-800 border-amber-200',
+  },
+  low: { label: 'Thấp', badgeClass: 'bg-slate-50 text-slate-600 border-slate-200' },
+} as const;
+
 function formatTimeHHMM(isoString: string): string {
   const date = new Date(isoString);
   if (Number.isNaN(date.getTime())) return '';
@@ -59,6 +79,11 @@ export default function AdminPage() {
     currentUser,
     teams,
     users,
+    standups,
+    teamReports,
+    tasks,
+    announcements,
+    events,
     systemConfig,
     joinRequests,
     activityLogs,
@@ -79,9 +104,13 @@ export default function AdminPage() {
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'logs' | 'requests' | 'manage' | 'settings'>('logs');
+  const [logUserFilter, setLogUserFilter] = useState<string>('all');
   const [logTypeFilter, setLogTypeFilter] = useState<'all' | ActivityLogType>('all');
   const [logTeamFilter, setLogTeamFilter] = useState<string>('all');
   const [logSearch, setLogSearch] = useState('');
+  const [selectedLogId, setSelectedLogId] = useState<string | null>(null);
+  const [inspectingUserId, setInspectingUserId] = useState<string | null>(null);
+  const [inspectorTab, setInspectorTab] = useState<'all' | 'standups' | 'tasks' | 'reports'>('all');
 
   // System Config form state
   const [cfgStandupStartTime, setCfgStandupStartTime] = useState(
@@ -157,6 +186,7 @@ export default function AdminPage() {
   const filteredLogs = useMemo(() => {
     const q = logSearch.trim().toLowerCase();
     return activityLogs.filter((log) => {
+      if (logUserFilter !== 'all' && log.actorId !== logUserFilter) return false;
       if (logTypeFilter !== 'all' && log.type !== logTypeFilter) return false;
       if (logTeamFilter !== 'all' && log.teamId !== logTeamFilter) return false;
       if (!q) return true;
@@ -168,7 +198,91 @@ export default function AdminPage() {
         log.teamName.toLowerCase().includes(q)
       );
     });
-  }, [activityLogs, logTypeFilter, logTeamFilter, logSearch]);
+  }, [activityLogs, logUserFilter, logTypeFilter, logTeamFilter, logSearch]);
+
+  const standupById = useMemo(
+    () => new Map(standups.map((s) => [s.id, s])),
+    [standups]
+  );
+  const reportById = useMemo(
+    () => new Map(teamReports.map((r) => [r.id, r])),
+    [teamReports]
+  );
+  const taskById = useMemo(
+    () => new Map(tasks.map((t) => [t.id, t])),
+    [tasks]
+  );
+  const announcementById = useMemo(
+    () => new Map(announcements.map((a) => [a.id, a])),
+    [announcements]
+  );
+  const eventById = useMemo(
+    () => new Map(events.map((ev) => [ev.id, ev])),
+    [events]
+  );
+  const joinRequestById = useMemo(
+    () => new Map(joinRequests.map((jr) => [jr.id, jr])),
+    [joinRequests]
+  );
+  const userIdsSet = useMemo(
+    () => new Set(users.map((u) => u.id)),
+    [users]
+  );
+  const teamById = useMemo(
+    () => new Map(teams.map((t) => [t.id, t])),
+    [teams]
+  );
+  const userLogCounts = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const item of activityLogs) {
+      if (!item.actorId) continue;
+      map.set(item.actorId, (map.get(item.actorId) ?? 0) + 1);
+    }
+    return map;
+  }, [activityLogs]);
+
+  const selectedLog = useMemo(
+    () => activityLogs.find((l) => l.id === selectedLogId) ?? null,
+    [activityLogs, selectedLogId]
+  );
+  const inspectingUser = useMemo(
+    () => users.find((u) => u.id === inspectingUserId) ?? null,
+    [users, inspectingUserId]
+  );
+  const inspectingUserLogs = useMemo(
+    () =>
+      inspectingUser
+        ? activityLogs.filter((l) => l.actorId === inspectingUser.id)
+        : [],
+    [activityLogs, inspectingUser]
+  );
+  const inspectingUserStandups = useMemo(
+    () =>
+      inspectingUser
+        ? standups
+            .filter((s) => s.userId === inspectingUser.id)
+            .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+        : [],
+    [standups, inspectingUser]
+  );
+  const inspectingUserTasks = useMemo(
+    () =>
+      inspectingUser
+        ? tasks
+            .filter((t) => t.userId === inspectingUser.id)
+            .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
+        : [],
+    [tasks, inspectingUser]
+  );
+  const inspectingUserReports = useMemo(
+    () =>
+      inspectingUser
+        ? teamReports
+            .filter((r) => r.authorId === inspectingUser.id)
+            .sort((a, b) => b.meetingDate.localeCompare(a.meetingDate))
+        : [],
+    [teamReports, inspectingUser]
+  );
 
   if (!isAdmin) {
     return (
@@ -288,6 +402,218 @@ export default function AdminPage() {
     else if (type === 'event') deleteCalendarEvent(recordId);
   };
 
+  const renderStructuredLogBody = (log: ActivityLogItem, detailed = false) => {
+    if (log.type === 'standup') {
+      const su = standupById.get(log.recordId);
+      if (su) {
+        return (
+          <div className="mt-3 space-y-2.5">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+              <span className="rounded-lg bg-indigo-50 px-2.5 py-0.5 font-semibold text-indigo-700">
+                Ngày Standup: {formatVietnameseDate(su.date)}
+              </span>
+              {formatTimeHHMM(su.createdAt) && (
+                <span>Gửi lúc {formatTimeHHMM(su.createdAt)}</span>
+              )}
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="rounded-xl border border-slate-200/80 bg-slate-50/70 p-3 text-xs leading-relaxed text-slate-700">
+                <p className="mb-1 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                  Hôm qua làm gì
+                </p>
+                <p className="whitespace-pre-line">{su.yesterday}</p>
+              </div>
+              <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-3 text-xs leading-relaxed text-slate-700">
+                <p className="mb-1 text-[11px] font-bold uppercase tracking-wider text-indigo-600">
+                  Hôm nay làm gì
+                </p>
+                <p className="whitespace-pre-line">{su.today}</p>
+              </div>
+            </div>
+            {su.blockers && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-relaxed text-amber-900">
+                <span className="font-bold">Đang vướng: </span>
+                <span className="whitespace-pre-line">{su.blockers}</span>
+              </div>
+            )}
+          </div>
+        );
+      }
+    }
+
+    if (log.type === 'report') {
+      const rep = reportById.get(log.recordId);
+      if (rep) {
+        return (
+          <div className="mt-3 space-y-2.5">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+              <span className="rounded-lg bg-sky-50 px-2.5 py-0.5 font-semibold text-sky-700">
+                Ngày họp: {formatVietnameseDate(rep.meetingDate)}
+              </span>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="rounded-xl border border-slate-200/80 bg-slate-50/70 p-3 text-xs leading-relaxed text-slate-700">
+                <p className="mb-1 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                  Đã hoàn thành
+                </p>
+                <p className="whitespace-pre-line">{rep.done}</p>
+              </div>
+              <div className="rounded-xl border border-sky-100 bg-sky-50/40 p-3 text-xs leading-relaxed text-slate-700">
+                <p className="mb-1 text-[11px] font-bold uppercase tracking-wider text-sky-700">
+                  Đang thực hiện
+                </p>
+                <p className="whitespace-pre-line">{rep.inProgress}</p>
+              </div>
+            </div>
+            {rep.blockers && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-relaxed text-amber-900">
+                <span className="font-bold">Vướng mắc: </span>
+                <span className="whitespace-pre-line">{rep.blockers}</span>
+              </div>
+            )}
+            {rep.questions && (
+              <div className="rounded-xl border border-indigo-100 bg-indigo-50/50 p-3 text-xs leading-relaxed text-indigo-900">
+                <span className="font-bold">Câu hỏi gửi Mentor / Admin: </span>
+                <span className="whitespace-pre-line">{rep.questions}</span>
+              </div>
+            )}
+            {detailed && rep.links.length > 0 && (
+              <div className="flex flex-wrap gap-2 pt-1">
+                {rep.links.map((lk, idx) => (
+                  <a
+                    key={`${lk.url}-${idx}`}
+                    href={lk.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-indigo-700 hover:bg-indigo-50"
+                  >
+                    {lk.label || lk.url}
+                  </a>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      }
+    }
+
+    if (log.type === 'task') {
+      const tsk = taskById.get(log.recordId);
+      if (tsk) {
+        const statusMeta = TASK_STATUS_META[tsk.status];
+        const prioMeta = TASK_PRIORITY_META[tsk.priority];
+        return (
+          <div className="mt-3 space-y-2.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-lg bg-slate-100 px-2.5 py-0.5 text-[11px] font-semibold text-slate-700">
+                Hạng mục: {tsk.category}
+              </span>
+              <span
+                className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${statusMeta.badgeClass}`}
+              >
+                {statusMeta.label}
+              </span>
+              <span
+                className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${prioMeta.badgeClass}`}
+              >
+                Ưu tiên: {prioMeta.label}
+              </span>
+              <span className="rounded-lg bg-emerald-50 px-2.5 py-0.5 text-[11px] font-bold text-emerald-700">
+                Tiến độ: {tsk.progressPercent}%
+              </span>
+              <span className="text-xs font-medium text-slate-500">
+                Hạn: {formatVietnameseDate(tsk.dueDate)}
+              </span>
+            </div>
+            {detailed && (
+              <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                <div
+                  className="h-full rounded-full bg-indigo-600 transition-all"
+                  style={{ width: `${tsk.progressPercent}%` }}
+                />
+              </div>
+            )}
+          </div>
+        );
+      }
+    }
+
+    if (detailed && log.type === 'announcement') {
+      const ann = announcementById.get(log.recordId);
+      if (ann) {
+        return (
+          <div className="mt-3 space-y-2 rounded-xl border border-slate-200/80 bg-slate-50/70 p-3.5 text-sm text-slate-700">
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <span className="rounded-full bg-amber-100 px-2.5 py-0.5 font-bold text-amber-800">
+                Phân loại: {ann.category}
+              </span>
+              <span className="rounded-full bg-slate-200/80 px-2.5 py-0.5 font-semibold text-slate-700">
+                Mức độ: {ann.priority}
+              </span>
+            </div>
+            <p className="whitespace-pre-line leading-relaxed">{ann.content}</p>
+          </div>
+        );
+      }
+    }
+
+    if (detailed && log.type === 'event') {
+      const ev = eventById.get(log.recordId);
+      if (ev) {
+        return (
+          <div className="mt-3 space-y-2 rounded-xl border border-slate-200/80 bg-slate-50/70 p-3.5 text-sm text-slate-700">
+            <p className="text-xs font-semibold text-slate-500">
+              Thời gian: {formatVietnameseDate(ev.date)} · {ev.time}
+            </p>
+            {ev.description && (
+              <p className="whitespace-pre-line leading-relaxed">{ev.description}</p>
+            )}
+            {ev.location && (
+              <p className="text-xs text-slate-600">Địa điểm: {ev.location}</p>
+            )}
+            {ev.meetingLink && (
+              <a
+                href={ev.meetingLink}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-block text-xs font-semibold text-indigo-600 hover:underline"
+              >
+                Mở link họp trực tuyến
+              </a>
+            )}
+          </div>
+        );
+      }
+    }
+
+    if (detailed && log.type === 'join_request') {
+      const req = joinRequestById.get(log.recordId);
+      if (req) {
+        const fromTeam = req.fromTeamId
+          ? teamById.get(req.fromTeamId)?.name ?? req.fromTeamId
+          : 'Chưa có đội';
+        return (
+          <div className="mt-3 space-y-2 rounded-xl border border-violet-200 bg-violet-50/50 p-3.5 text-sm text-slate-700">
+            <p className="text-xs font-semibold text-violet-800">
+              Từ: {fromTeam} sang đội: {req.toTeamName}
+            </p>
+            {req.message && (
+              <p className="whitespace-pre-line text-xs leading-relaxed">
+                Lời nhắn: {req.message}
+              </p>
+            )}
+          </div>
+        );
+      }
+    }
+
+    return (
+      <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-slate-600">
+        {log.detail}
+      </p>
+    );
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -371,55 +697,121 @@ export default function AdminPage() {
       {/* TAB 1: NHẬT KÝ & BÀI NỘP THÀNH VIÊN */}
       {activeTab === 'logs' && (
         <section className="space-y-4">
-          <div className="grid gap-3 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-xs sm:grid-cols-12">
-            <div className="sm:col-span-5">
-              <label className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                Tìm kiếm bài nộp / thành viên
-              </label>
-              <input
-                type="text"
-                value={logSearch}
-                onChange={(e) => setLogSearch(e.target.value)}
-                placeholder="Tên người nộp, email, nội dung..."
-                className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-sm outline-none focus:border-indigo-500"
-              />
+          <div className="space-y-3 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-xs">
+            <div className="grid gap-3 sm:grid-cols-12">
+              <div className="sm:col-span-3">
+                <label className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                  Tìm kiếm bài nộp / thành viên
+                </label>
+                <input
+                  type="text"
+                  value={logSearch}
+                  onChange={(e) => setLogSearch(e.target.value)}
+                  placeholder="Tên người nộp, email, nội dung..."
+                  className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-sm outline-none focus:border-indigo-500"
+                />
+              </div>
+              <div className="sm:col-span-3">
+                <label className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                  Lọc theo Thành viên
+                </label>
+                <select
+                  value={logUserFilter}
+                  onChange={(e) => setLogUserFilter(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500"
+                >
+                  <option value="all">Tất cả thành viên ({users.length})</option>
+                  {users.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.name} ({u.email})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="sm:col-span-3">
+                <label className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                  Loại hoạt động
+                </label>
+                <select
+                  value={logTypeFilter}
+                  onChange={(e) =>
+                    setLogTypeFilter(e.target.value as 'all' | ActivityLogType)
+                  }
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500"
+                >
+                  <option value="all">Tất cả hoạt động</option>
+                  <option value="standup">Daily Standup</option>
+                  <option value="report">Báo cáo họp nhóm</option>
+                  <option value="task">Công việc / Tiến độ</option>
+                  <option value="announcement">Thông báo</option>
+                  <option value="event">Lịch sự kiện</option>
+                  <option value="join_request">Xin gia nhập đội</option>
+                </select>
+              </div>
+              <div className="sm:col-span-3">
+                <label className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                  Lọc theo Đội
+                </label>
+                <select
+                  value={logTeamFilter}
+                  onChange={(e) => setLogTeamFilter(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500"
+                >
+                  <option value="all">Tất cả đội</option>
+                  {teams.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
-            <div className="sm:col-span-4">
-              <label className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                Loại hoạt động
-              </label>
-              <select
-                value={logTypeFilter}
-                onChange={(e) =>
-                  setLogTypeFilter(e.target.value as 'all' | ActivityLogType)
-                }
-                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500"
-              >
-                <option value="all">Tất cả hoạt động</option>
-                <option value="standup">Daily Standup</option>
-                <option value="report">Báo cáo họp nhóm</option>
-                <option value="task">Công việc / Tiến độ</option>
-                <option value="announcement">Thông báo</option>
-                <option value="event">Lịch sự kiện</option>
-                <option value="join_request">Xin gia nhập đội</option>
-              </select>
-            </div>
-            <div className="sm:col-span-3">
-              <label className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                Lọc theo Đội
-              </label>
-              <select
-                value={logTeamFilter}
-                onChange={(e) => setLogTeamFilter(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500"
-              >
-                <option value="all">Tất cả đội</option>
-                {teams.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
+
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setLogUserFilter('all')}
+                  className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
+                    logUserFilter === 'all'
+                      ? 'bg-slate-900 text-white'
+                      : 'border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  Tất cả ({activityLogs.length})
+                </button>
+                {users.map((u) => {
+                  const cnt = userLogCounts.get(u.id) ?? 0;
+                  const active = logUserFilter === u.id;
+                  return (
+                    <button
+                      key={u.id}
+                      type="button"
+                      onClick={() => setLogUserFilter(u.id)}
+                      className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
+                        active
+                          ? 'bg-indigo-600 text-white shadow-xs'
+                          : 'border border-slate-200 bg-slate-50 text-slate-700 hover:bg-indigo-50 hover:text-indigo-700'
+                      }`}
+                    >
+                      {u.name} ({cnt})
+                    </button>
+                  );
+                })}
+              </div>
+
+              {logUserFilter !== 'all' && userIdsSet.has(logUserFilter) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setInspectingUserId(logUserFilter);
+                    setInspectorTab('all');
+                  }}
+                  className="rounded-xl bg-indigo-50 px-3 py-1.5 text-xs font-bold text-indigo-700 hover:bg-indigo-100"
+                >
+                  Xem toàn bộ hồ sơ của thành viên đang chọn
+                </button>
+              )}
             </div>
           </div>
 
@@ -433,6 +825,8 @@ export default function AdminPage() {
                 const meta = LOG_TYPE_META[log.type];
                 const datePart = log.createdAt.slice(0, 10);
                 const timePart = formatTimeHHMM(log.createdAt);
+                const hasInspectableActor =
+                  Boolean(log.actorId) && userIdsSet.has(log.actorId);
                 return (
                   <article
                     key={log.id}
@@ -454,17 +848,26 @@ export default function AdminPage() {
                         </span>
                       </div>
 
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <button
                           type="button"
-                          onClick={() => {
-                            if (log.teamId) setCurrentTeamId(log.teamId);
-                            router.push(log.targetHref);
-                          }}
-                          className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                          onClick={() => setSelectedLogId(log.id)}
+                          className="rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700 hover:bg-indigo-100"
                         >
                           Xem chi tiết
                         </button>
+                        {hasInspectableActor && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setInspectingUserId(log.actorId);
+                              setInspectorTab('all');
+                            }}
+                            className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                          >
+                            Hồ sơ thành viên
+                          </button>
+                        )}
                         {log.type !== 'join_request' && (
                           <button
                             type="button"
@@ -500,9 +903,7 @@ export default function AdminPage() {
                     <h3 className="mt-3 text-base font-bold text-slate-900">
                       {log.title}
                     </h3>
-                    <p className="mt-1 text-sm leading-relaxed text-slate-600">
-                      {log.detail}
-                    </p>
+                    {renderStructuredLogBody(log)}
                   </article>
                 );
               })
@@ -696,6 +1097,9 @@ export default function AdminPage() {
               {users.map((u) => {
                 const protectedAdmin = isAdminEmail(u.email);
                 const isSelf = u.id === currentUser?.id;
+                const uStandupCount = standups.filter((s) => s.userId === u.id).length;
+                const uTaskCount = tasks.filter((t) => t.userId === u.id).length;
+                const uLogCount = activityLogs.filter((l) => l.actorId === u.id).length;
                 return (
                   <div
                     key={u.id}
@@ -726,10 +1130,24 @@ export default function AdminPage() {
                         <p className="truncate text-xs text-slate-500">
                           {u.email} · {u.title}
                         </p>
+                        <p className="mt-0.5 text-[11px] font-medium text-indigo-600">
+                          {uStandupCount} Standup · {uTaskCount} Công việc · {uLogCount} Nhật ký
+                        </p>
                       </div>
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setInspectingUserId(u.id);
+                          setInspectorTab('all');
+                        }}
+                        className="rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100"
+                      >
+                        Xem nhật ký &amp; bài nộp ({uLogCount})
+                      </button>
+
                       <select
                         value={u.role}
                         disabled={protectedAdmin}
@@ -1539,6 +1957,486 @@ export default function AdminPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal 1: Chi tiết Nhật ký & Bài nộp */}
+      {selectedLog && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs"
+          onClick={() => setSelectedLogId(null)}
+        >
+          <div
+            className="max-h-[88vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-4">
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span
+                    className={`rounded-full border px-2.5 py-0.5 text-[11px] font-bold ${
+                      LOG_TYPE_META[selectedLog.type].badgeClass
+                    }`}
+                  >
+                    {LOG_TYPE_META[selectedLog.type].label}
+                  </span>
+                  <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-semibold text-slate-700">
+                    {selectedLog.teamName}
+                  </span>
+                  <span className="text-xs font-medium text-slate-500">
+                    {formatVietnameseDate(selectedLog.createdAt.slice(0, 10))}
+                    {formatTimeHHMM(selectedLog.createdAt)
+                      ? ` · ${formatTimeHHMM(selectedLog.createdAt)}`
+                      : ''}
+                  </span>
+                </div>
+                <h3 className="mt-2 text-xl font-bold text-slate-900">
+                  {selectedLog.title}
+                </h3>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setSelectedLogId(null)}
+                className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100"
+              >
+                Đóng
+              </button>
+            </div>
+
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200/80 bg-slate-50/70 p-3.5">
+              <div className="flex min-w-0 items-center gap-3">
+                <UserAvatar
+                  src={selectedLog.actorAvatar}
+                  name={selectedLog.actorName}
+                  size="md"
+                />
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-bold text-slate-900">
+                    {selectedLog.actorName}
+                  </p>
+                  {selectedLog.actorEmail && (
+                    <p className="truncate text-xs text-slate-500">
+                      {selectedLog.actorEmail}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {selectedLog.actorId && userIdsSet.has(selectedLog.actorId) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const actorId = selectedLog.actorId;
+                    setSelectedLogId(null);
+                    setInspectingUserId(actorId);
+                    setInspectorTab('all');
+                  }}
+                  className="rounded-xl border border-indigo-200 bg-white px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-50"
+                >
+                  Xem tất cả bài nộp của thành viên này
+                </button>
+              )}
+            </div>
+
+            <div className="mt-4">{renderStructuredLogBody(selectedLog, true)}</div>
+
+            <div className="mt-6 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (selectedLog.type === 'join_request') {
+                      setSelectedLogId(null);
+                      setActiveTab('requests');
+                      return;
+                    }
+                    if (selectedLog.teamId) setCurrentTeamId(selectedLog.teamId);
+                    const href = selectedLog.targetHref;
+                    setSelectedLogId(null);
+                    router.push(href);
+                  }}
+                  className="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-700"
+                >
+                  Mở tại trang chức năng
+                </button>
+
+                {selectedLog.type !== 'join_request' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const { type, recordId } = selectedLog;
+                      setSelectedLogId(null);
+                      handleDeleteLogRecord(type, recordId);
+                    }}
+                    className="rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-100"
+                  >
+                    Xóa bản ghi
+                  </button>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setSelectedLogId(null)}
+                className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100"
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal 2: Hồ sơ Nhật ký & Bài nộp của Thành viên */}
+      {inspectingUser && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs"
+          onClick={() => setInspectingUserId(null)}
+        >
+          <div
+            className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-4">
+              <div className="flex min-w-0 items-center gap-3">
+                <UserAvatar
+                  src={inspectingUser.avatarUrl}
+                  name={inspectingUser.name}
+                  size="lg"
+                />
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="truncate text-lg font-extrabold text-slate-900">
+                      Hồ sơ Nhật ký &amp; Bài nộp: {inspectingUser.name}
+                    </h3>
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                        inspectingUser.role === 'admin'
+                          ? 'bg-indigo-600 text-white'
+                          : 'bg-slate-100 text-slate-700'
+                      }`}
+                    >
+                      {inspectingUser.role === 'admin' ? 'Admin' : 'Thành viên'}
+                    </span>
+                  </div>
+                  <p className="truncate text-xs text-slate-500">
+                    {inspectingUser.email} ·{' '}
+                    {inspectingUser.teamId
+                      ? teamById.get(inspectingUser.teamId)?.name ??
+                        inspectingUser.teamId
+                      : 'Chưa có đội'}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setInspectingUserId(null)}
+                className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100"
+              >
+                Đóng
+              </button>
+            </div>
+
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <div className="rounded-2xl border border-slate-200/80 bg-slate-50/70 p-3">
+                <p className="text-[11px] font-medium text-slate-500">Daily Standup</p>
+                <p className="mt-1 text-xl font-extrabold text-indigo-600">
+                  {inspectingUserStandups.length}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-slate-200/80 bg-slate-50/70 p-3">
+                <p className="text-[11px] font-medium text-slate-500">
+                  Công việc / Tiến độ
+                </p>
+                <p className="mt-1 text-xl font-extrabold text-emerald-600">
+                  {inspectingUserTasks.length}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-slate-200/80 bg-slate-50/70 p-3">
+                <p className="text-[11px] font-medium text-slate-500">
+                  Báo cáo họp nhóm
+                </p>
+                <p className="mt-1 text-xl font-extrabold text-sky-600">
+                  {inspectingUserReports.length}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-slate-200/80 bg-slate-50/70 p-3">
+                <p className="text-[11px] font-medium text-slate-500">Tổng nhật ký</p>
+                <p className="mt-1 text-xl font-extrabold text-slate-900">
+                  {inspectingUserLogs.length}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-4 inline-flex flex-wrap gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1">
+              {(
+                [
+                  { id: 'all', label: `Tất cả nhật ký (${inspectingUserLogs.length})` },
+                  { id: 'standups', label: `Daily Standup (${inspectingUserStandups.length})` },
+                  { id: 'tasks', label: `Công việc (${inspectingUserTasks.length})` },
+                  { id: 'reports', label: `Báo cáo nhóm (${inspectingUserReports.length})` },
+                ] as const
+              ).map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setInspectorTab(tab.id)}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                    inspectorTab === tab.id
+                      ? 'bg-white text-indigo-700 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="mt-4 space-y-3">
+              {inspectorTab === 'all' &&
+                (inspectingUserLogs.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-slate-200 p-8 text-center text-sm text-slate-500">
+                    Thành viên này chưa có nhật ký hoặc bài nộp nào.
+                  </div>
+                ) : (
+                  inspectingUserLogs.map((log) => (
+                    <article
+                      key={log.id}
+                      className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-xs"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span
+                            className={`rounded-full border px-2.5 py-0.5 text-[11px] font-bold ${
+                              LOG_TYPE_META[log.type].badgeClass
+                            }`}
+                          >
+                            {LOG_TYPE_META[log.type].label}
+                          </span>
+                          <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-semibold text-slate-700">
+                            {log.teamName}
+                          </span>
+                          <span className="text-xs text-slate-500">
+                            {formatVietnameseDate(log.createdAt.slice(0, 10))}
+                            {formatTimeHHMM(log.createdAt)
+                              ? ` · ${formatTimeHHMM(log.createdAt)}`
+                              : ''}
+                          </span>
+                        </div>
+
+                        {log.type !== 'join_request' && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteLogRecord(log.type, log.recordId)}
+                            className="rounded-lg border border-slate-200 px-2.5 py-1 text-[11px] font-semibold text-slate-500 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"
+                          >
+                            Xóa
+                          </button>
+                        )}
+                      </div>
+                      <h4 className="mt-2.5 text-sm font-bold text-slate-900">
+                        {log.title}
+                      </h4>
+                      {renderStructuredLogBody(log, true)}
+                    </article>
+                  ))
+                ))}
+
+              {inspectorTab === 'standups' &&
+                (inspectingUserStandups.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-slate-200 p-8 text-center text-sm text-slate-500">
+                    Thành viên này chưa nộp Daily Standup nào.
+                  </div>
+                ) : (
+                  inspectingUserStandups.map((su) => (
+                    <article
+                      key={su.id}
+                      className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-xs"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-bold text-indigo-700">
+                            Ngày Standup: {formatVietnameseDate(su.date)}
+                          </span>
+                          <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-semibold text-slate-700">
+                            {teamById.get(su.teamId)?.name ?? su.teamId}
+                          </span>
+                          {formatTimeHHMM(su.createdAt) && (
+                            <span className="text-xs text-slate-500">
+                              Gửi lúc {formatTimeHHMM(su.createdAt)}
+                            </span>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => deleteStandup(su.id)}
+                          className="rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1 text-[11px] font-semibold text-rose-700 hover:bg-rose-100"
+                        >
+                          Xóa Standup
+                        </button>
+                      </div>
+                      <div className="mt-3 grid gap-3 md:grid-cols-2">
+                        <div className="rounded-xl border border-slate-200/80 bg-slate-50/70 p-3 text-xs leading-relaxed text-slate-700">
+                          <p className="mb-1 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                            Hôm qua làm gì
+                          </p>
+                          <p className="whitespace-pre-line">{su.yesterday}</p>
+                        </div>
+                        <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-3 text-xs leading-relaxed text-slate-700">
+                          <p className="mb-1 text-[11px] font-bold uppercase tracking-wider text-indigo-600">
+                            Hôm nay làm gì
+                          </p>
+                          <p className="whitespace-pre-line">{su.today}</p>
+                        </div>
+                      </div>
+                      {su.blockers && (
+                        <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                          <span className="font-bold">Đang vướng: </span>
+                          <span className="whitespace-pre-line">{su.blockers}</span>
+                        </div>
+                      )}
+                    </article>
+                  ))
+                ))}
+
+              {inspectorTab === 'tasks' &&
+                (inspectingUserTasks.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-slate-200 p-8 text-center text-sm text-slate-500">
+                    Thành viên này chưa có công việc nào.
+                  </div>
+                ) : (
+                  inspectingUserTasks.map((tsk) => {
+                    const statusMeta = TASK_STATUS_META[tsk.status];
+                    const prioMeta = TASK_PRIORITY_META[tsk.priority];
+                    return (
+                      <article
+                        key={tsk.id}
+                        className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-xs"
+                      >
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <div className="space-y-1.5">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="rounded-lg bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700">
+                                {tsk.category}
+                              </span>
+                              <span
+                                className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${statusMeta.badgeClass}`}
+                              >
+                                {statusMeta.label}
+                              </span>
+                              <span
+                                className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${prioMeta.badgeClass}`}
+                              >
+                                Ưu tiên: {prioMeta.label}
+                              </span>
+                              <span className="text-xs text-slate-500">
+                                Hạn: {formatVietnameseDate(tsk.dueDate)}
+                              </span>
+                            </div>
+                            <h4 className="text-sm font-bold text-slate-900">
+                              {tsk.title}
+                            </h4>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="rounded-lg bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">
+                              {tsk.progressPercent}%
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => deleteTask(tsk.id)}
+                              className="rounded-lg border border-slate-200 px-2.5 py-1 text-[11px] font-semibold text-slate-500 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"
+                            >
+                              Xóa
+                            </button>
+                          </div>
+                        </div>
+                        <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                          <div
+                            className="h-full rounded-full bg-indigo-600 transition-all"
+                            style={{ width: `${tsk.progressPercent}%` }}
+                          />
+                        </div>
+                      </article>
+                    );
+                  })
+                ))}
+
+              {inspectorTab === 'reports' &&
+                (inspectingUserReports.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-slate-200 p-8 text-center text-sm text-slate-500">
+                    Thành viên này chưa gửi báo cáo họp nhóm nào.
+                  </div>
+                ) : (
+                  inspectingUserReports.map((rep) => (
+                    <article
+                      key={rep.id}
+                      className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-xs"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <span className="rounded-full bg-sky-50 px-2.5 py-0.5 text-xs font-bold text-sky-700">
+                            Ngày họp: {formatVietnameseDate(rep.meetingDate)}
+                          </span>
+                          <h4 className="mt-1.5 text-sm font-bold text-slate-900">
+                            {rep.title}
+                          </h4>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => deleteTeamReport(rep.id)}
+                          className="rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1 text-[11px] font-semibold text-rose-700 hover:bg-rose-100"
+                        >
+                          Xóa báo cáo
+                        </button>
+                      </div>
+                      <div className="mt-3 grid gap-3 md:grid-cols-2">
+                        <div className="rounded-xl border border-slate-200/80 bg-slate-50/70 p-3 text-xs text-slate-700">
+                          <p className="mb-1 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                            Đã hoàn thành
+                          </p>
+                          <p className="whitespace-pre-line">{rep.done}</p>
+                        </div>
+                        <div className="rounded-xl border border-sky-100 bg-sky-50/40 p-3 text-xs text-slate-700">
+                          <p className="mb-1 text-[11px] font-bold uppercase tracking-wider text-sky-700">
+                            Đang thực hiện
+                          </p>
+                          <p className="whitespace-pre-line">{rep.inProgress}</p>
+                        </div>
+                      </div>
+                      {rep.blockers && (
+                        <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                          <span className="font-bold">Vướng mắc: </span>
+                          <span className="whitespace-pre-line">{rep.blockers}</span>
+                        </div>
+                      )}
+                      {rep.questions && (
+                        <div className="mt-3 rounded-xl border border-indigo-100 bg-indigo-50/50 p-3 text-xs text-indigo-900">
+                          <span className="font-bold">Câu hỏi gửi Mentor / Admin: </span>
+                          <span className="whitespace-pre-line">{rep.questions}</span>
+                        </div>
+                      )}
+                      {rep.links.length > 0 && (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {rep.links.map((lk, idx) => (
+                            <a
+                              key={`${lk.url}-${idx}`}
+                              href={lk.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-indigo-700 hover:bg-indigo-50"
+                            >
+                              {lk.label || lk.url}
+                            </a>
+                          ))}
+                        </div>
+                      )}
+                    </article>
+                  ))
+                ))}
+            </div>
           </div>
         </div>
       )}

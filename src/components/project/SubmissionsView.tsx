@@ -29,6 +29,7 @@ export function SubmissionsView() {
     currentUser,
     currentTeam,
     teams,
+    users,
     standups,
     teamReports,
     systemConfig,
@@ -49,8 +50,13 @@ export function SubmissionsView() {
   const [yesterday, setYesterday] = useState('');
   const [todayPlan, setTodayPlan] = useState('');
   const [standupBlockers, setStandupBlockers] = useState('');
-  const [historyScope, setHistoryScope] = useState<'mine' | 'team' | 'all_teams'>('mine');
-  const [reportScope, setReportScope] = useState<'team' | 'all_teams'>('team');
+  const [historyScope, setHistoryScope] = useState<'mine' | 'team' | 'all_teams'>(
+    isAdmin ? 'all_teams' : 'mine'
+  );
+  const [reportScope, setReportScope] = useState<'team' | 'all_teams'>(
+    isAdmin ? 'all_teams' : 'team'
+  );
+  const [selectedHistoryUserId, setSelectedHistoryUserId] = useState<string>('all');
   const [standupSuccess, setStandupSuccess] = useState(false);
 
   // Team Meeting Report state
@@ -107,6 +113,17 @@ export function SubmissionsView() {
     const timer = setInterval(updateClock, 15000);
     return () => clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    if (isAdmin) {
+      setHistoryScope('all_teams');
+      setReportScope('all_teams');
+    } else {
+      setHistoryScope('mine');
+      setReportScope('team');
+      setSelectedHistoryUserId('all');
+    }
+  }, [isAdmin]);
 
   useEffect(() => {
     setDraftStartTime(systemConfig.standupStartTime);
@@ -179,8 +196,18 @@ export function SubmissionsView() {
       .filter((s) =>
         historyScope === 'mine' ? s.userId === currentUser.id : true
       )
+      .filter((s) =>
+        selectedHistoryUserId === 'all' ? true : s.userId === selectedHistoryUserId
+      )
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  }, [standups, currentTeam.id, historyScope, currentUser, isAdmin]);
+  }, [
+    standups,
+    currentTeam.id,
+    historyScope,
+    selectedHistoryUserId,
+    currentUser,
+    isAdmin,
+  ]);
 
   const filteredReports = useMemo(() => {
     return teamReports
@@ -707,40 +734,61 @@ export function SubmissionsView() {
               </div>
 
               {isAdmin ? (
-                <div className="inline-flex flex-wrap rounded-xl border border-slate-200 bg-slate-50 p-1">
-                  <button
-                    type="button"
-                    onClick={() => setHistoryScope('mine')}
-                    className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
-                      historyScope === 'mine'
-                        ? 'bg-white text-indigo-700 shadow-xs'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="inline-flex flex-wrap rounded-xl border border-slate-200 bg-slate-50 p-1">
+                    <button
+                      type="button"
+                      onClick={() => setHistoryScope('mine')}
+                      className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                        historyScope === 'mine'
+                          ? 'bg-white text-indigo-700 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      Bài nộp của tôi
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setHistoryScope('team')}
+                      className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                        historyScope === 'team'
+                          ? 'bg-white text-indigo-700 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      {currentTeam.id ? `Cả đội (${currentTeam.name})` : 'Cả đội'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setHistoryScope('all_teams')}
+                      className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                        historyScope === 'all_teams'
+                          ? 'bg-white text-indigo-700 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      Tất cả các đội
+                    </button>
+                  </div>
+
+                  <select
+                    value={selectedHistoryUserId}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setSelectedHistoryUserId(val);
+                      if (val !== 'all' && historyScope === 'mine') {
+                        setHistoryScope('all_teams');
+                      }
+                    }}
+                    className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:border-indigo-500"
                   >
-                    Bài nộp của tôi
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setHistoryScope('team')}
-                    className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
-                      historyScope === 'team'
-                        ? 'bg-white text-indigo-700 shadow-xs'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    {currentTeam.id ? `Cả đội (${currentTeam.name})` : 'Cả đội'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setHistoryScope('all_teams')}
-                    className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
-                      historyScope === 'all_teams'
-                        ? 'bg-white text-indigo-700 shadow-xs'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    Tất cả các đội
-                  </button>
+                    <option value="all">Tất cả thành viên ({users.length})</option>
+                    {users.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.name} ({u.email})
+                      </option>
+                    ))}
+                  </select>
                 </div>
               ) : (
                 <span className="inline-flex items-center rounded-xl border border-indigo-100 bg-indigo-50/70 px-3 py-1.5 text-xs font-semibold text-indigo-700">
@@ -777,7 +825,7 @@ export function SubmissionsView() {
                               <p className="text-sm font-bold text-slate-900">
                                 {item.userName}
                               </p>
-                              {isAdmin && historyScope === 'all_teams' && itemTeam && (
+                              {isAdmin && itemTeam && (
                                 <span className="rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-600">
                                   {itemTeam.name}
                                 </span>
@@ -907,20 +955,20 @@ export function SubmissionsView() {
                               <p className="mb-1 font-bold uppercase tracking-wider text-slate-400">
                                 Hôm qua làm gì
                               </p>
-                              {item.yesterday}
+                              <p className="whitespace-pre-line">{item.yesterday}</p>
                             </div>
                             <div className="rounded-xl bg-white p-3 text-xs leading-relaxed text-slate-700">
                               <p className="mb-1 font-bold uppercase tracking-wider text-indigo-500">
                                 Hôm nay làm gì
                               </p>
-                              {item.today}
+                              <p className="whitespace-pre-line">{item.today}</p>
                             </div>
                           </div>
 
                           {item.blockers && (
-                            <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                            <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-relaxed text-amber-900">
                               <span className="font-bold">Đang vướng: </span>
-                              {item.blockers}
+                              <span className="whitespace-pre-line">{item.blockers}</span>
                             </div>
                           )}
                         </>
