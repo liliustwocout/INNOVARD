@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useApp } from '@/context/AppContext';
 import { UserAvatar } from '@/components/ui/UserAvatar';
 import { formatVietnameseDate, getTodayISO } from '@/lib/date-utils';
@@ -116,8 +117,9 @@ export function SubmissionsView() {
     effectiveStandupDate === todayISO &&
     isPastDeadlineToday;
 
+  const isUnassignedMember = !isAdmin && !currentTeam.id;
   const hasSubmittedToday = useMemo(() => {
-    if (!currentUser) return false;
+    if (!currentUser || !currentTeam.id) return false;
     return standups.some(
       (s) =>
         s.userId === currentUser.id &&
@@ -134,7 +136,9 @@ export function SubmissionsView() {
   const filteredStandups = useMemo(() => {
     return standups
       .filter((s) =>
-        historyScope === 'all_teams' && isAdmin ? true : s.teamId === currentTeam.id
+        historyScope === 'all_teams' && isAdmin
+          ? true
+          : Boolean(currentTeam.id) && s.teamId === currentTeam.id
       )
       .filter((s) =>
         historyScope === 'mine' ? s.userId === currentUser?.id : true
@@ -145,7 +149,9 @@ export function SubmissionsView() {
   const filteredReports = useMemo(() => {
     return teamReports
       .filter((r) =>
-        reportScope === 'all_teams' && isAdmin ? true : r.teamId === currentTeam.id
+        reportScope === 'all_teams' && isAdmin
+          ? true
+          : Boolean(currentTeam.id) && r.teamId === currentTeam.id
       )
       .sort((a, b) => b.meetingDate.localeCompare(a.meetingDate));
   }, [teamReports, currentTeam.id, reportScope, isAdmin]);
@@ -252,6 +258,24 @@ export function SubmissionsView() {
 
   return (
     <div className="space-y-6">
+      {isUnassignedMember && (
+        <section className="flex flex-col justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50/70 p-4 sm:flex-row sm:items-center">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wider text-amber-800">
+              Bạn chưa tham gia đội nào
+            </p>
+            <p className="mt-0.5 text-xs text-slate-700">
+              Hãy chọn đội và gửi yêu cầu gia nhập tại trang Đội của tôi để mở khóa nộp Daily Standup và Báo cáo họp nhóm.
+            </p>
+          </div>
+          <Link
+            href="/team"
+            className="shrink-0 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-700"
+          >
+            Chọn đội để xin gia nhập
+          </Link>
+        </section>
+      )}
       {/* Mode Switcher: Daily Standup vs Họp nhóm */}
       <div className="grid gap-3 sm:grid-cols-2">
         <button
@@ -313,7 +337,9 @@ export function SubmissionsView() {
                   Nộp Daily Standup hàng ngày
                 </h2>
                 <p className="text-xs text-slate-500">
-                  Cập nhật nhanh công việc mỗi ngày để cả đội {currentTeam.name} nắm bắt tiến độ.
+                  {currentTeam.id
+                    ? `Cập nhật nhanh công việc mỗi ngày để cả đội ${currentTeam.name} nắm bắt tiến độ.`
+                    : 'Cập nhật nhanh công việc mỗi ngày sau khi bạn gia nhập đội.'}
                 </p>
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   <span className="rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-0.5 text-[11px] font-semibold text-indigo-700">
@@ -487,7 +513,7 @@ export function SubmissionsView() {
               <div className="flex justify-end">
                 <button
                   type="submit"
-                  disabled={isStandupLockedForMember}
+                  disabled={isStandupLockedForMember || isUnassignedMember}
                   className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-xs transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500"
                 >
                   Gửi Daily Standup
@@ -529,7 +555,7 @@ export function SubmissionsView() {
                       : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
-                  Cả đội ({currentTeam.name})
+                  {currentTeam.id ? `Cả đội (${currentTeam.name})` : 'Cả đội'}
                 </button>
                 {isAdmin && (
                   <button
@@ -742,7 +768,9 @@ export function SubmissionsView() {
                   Nộp Báo cáo Họp nhóm (Team Meeting Report)
                 </h2>
                 <p className="text-xs text-slate-500">
-                  Tổng hợp tiến độ nhóm {currentTeam.name}, đính kèm link GitHub, Demo, Tài liệu và câu hỏi gửi Mentor.
+                  {currentTeam.id
+                    ? `Tổng hợp tiến độ nhóm ${currentTeam.name}, đính kèm link GitHub, Demo, Tài liệu và câu hỏi gửi Mentor.`
+                    : 'Tổng hợp tiến độ nhóm, đính kèm link GitHub, Demo, Tài liệu và câu hỏi gửi Mentor sau khi bạn tham gia đội.'}
                 </p>
               </div>
               <span className="rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">
@@ -916,7 +944,8 @@ export function SubmissionsView() {
               <div className="flex justify-end">
                 <button
                   type="submit"
-                  className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-xs transition hover:bg-indigo-700"
+                  disabled={isUnassignedMember}
+                  className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-xs transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500"
                 >
                   Lưu Báo cáo Họp nhóm
                 </button>
@@ -962,7 +991,9 @@ export function SubmissionsView() {
               <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-8 text-center text-sm text-slate-500">
                 {reportScope === 'all_teams' && isAdmin
                   ? 'Chưa có báo cáo họp nhóm nào trong hệ thống.'
-                  : `Đội ${currentTeam.name} chưa có báo cáo họp nhóm nào.`}
+                  : currentTeam.id
+                  ? `Đội ${currentTeam.name} chưa có báo cáo họp nhóm nào.`
+                  : 'Chưa có báo cáo họp nhóm nào.'}
               </div>
             ) : (
               filteredReports.map((rep) => {

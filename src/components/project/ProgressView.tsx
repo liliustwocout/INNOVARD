@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useApp } from '@/context/AppContext';
 import { UserAvatar } from '@/components/ui/UserAvatar';
 import { formatCountdownLabel, formatVietnameseDate, getTodayISO } from '@/lib/date-utils';
@@ -63,11 +64,14 @@ export function ProgressView() {
     [teams]
   );
 
+  const isUnassignedMember = !isAdmin && !currentTeam.id;
+
   const scopedTasks = useMemo(() => {
     if (!currentUser) return [];
     if (isAdmin && viewScope === 'all_teams') {
       return tasks;
     }
+    if (!currentTeam.id) return [];
     if (isAdmin && viewScope === 'team') {
       return tasks.filter((t) => t.teamId === currentTeam.id);
     }
@@ -81,6 +85,7 @@ export function ProgressView() {
     if (isAdmin && viewScope === 'all_teams') {
       return standups.length;
     }
+    if (!currentTeam.id) return 0;
     if (isAdmin && viewScope === 'team') {
       return standups.filter((s) => s.teamId === currentTeam.id).length;
     }
@@ -156,6 +161,24 @@ export function ProgressView() {
 
   return (
     <div className="space-y-6">
+      {isUnassignedMember && (
+        <section className="flex flex-col justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50/70 p-4 sm:flex-row sm:items-center">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wider text-amber-800">
+              Bạn chưa tham gia đội nào
+            </p>
+            <p className="mt-0.5 text-xs text-slate-700">
+              Hãy chọn đội ở trang Đội của tôi để bắt đầu tạo và cập nhật đầu việc cá nhân theo dự án.
+            </p>
+          </div>
+          <Link
+            href="/team"
+            className="shrink-0 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-700"
+          >
+            Chọn đội để xin gia nhập
+          </Link>
+        </section>
+      )}
       {/* Personal KPI Cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs">
@@ -209,7 +232,9 @@ export function ProgressView() {
           <p className="mt-1 text-xs text-slate-500">
             {isAdmin && viewScope === 'all_teams'
               ? 'Toàn bộ các đội'
-              : `Tại đội ${currentTeam.name}`}
+              : currentTeam.id
+              ? `Tại đội ${currentTeam.name}`
+              : 'Chưa tham gia đội'}
           </p>
         </div>
       </div>
@@ -232,8 +257,9 @@ export function ProgressView() {
 
           <button
             type="button"
+            disabled={isUnassignedMember}
             onClick={handleOpenNewTask}
-            className="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-indigo-700 sm:text-sm"
+            className="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500 sm:text-sm"
           >
             Thêm công việc
           </button>

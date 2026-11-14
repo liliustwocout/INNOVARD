@@ -83,7 +83,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   const upcomingEventsCount = useMemo(() => {
     return events.filter(
-      (ev) => ev.teamId === null || ev.teamId === currentTeam.id
+      (ev) => ev.teamId === null || (Boolean(currentTeam.id) && ev.teamId === currentTeam.id)
     ).length;
   }, [events, currentTeam.id]);
 
@@ -277,7 +277,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 INNOVARD
               </span>
               <span className="block text-[11px] font-medium text-slate-500">
-                Team Hub · {currentTeam.code}
+                Team Hub · {currentTeam.id ? currentTeam.code : 'Chưa có đội'}
               </span>
             </div>
           </Link>
@@ -326,7 +326,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </button>
             )}
           </div>
-        ) : (
+        ) : currentTeam.id ? (
           <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
             <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
               Đội của tôi
@@ -339,6 +339,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               className="mt-1.5 inline-block text-[11px] font-semibold text-indigo-600 hover:underline"
             >
               Xin gia nhập đội khác
+            </Link>
+          </div>
+        ) : (
+          <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50/70 px-3 py-2.5">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-amber-700">
+              Trạng thái đội
+            </p>
+            <p className="mt-0.5 truncate text-xs font-bold text-slate-900">
+              Chưa có đội
+            </p>
+            <Link
+              href="/team"
+              className="mt-1.5 inline-block text-[11px] font-semibold text-indigo-600 hover:underline"
+            >
+              Chọn đội để xin gia nhập
             </Link>
           </div>
         )}
@@ -514,7 +529,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               className="h-7 w-7 rounded-lg object-cover shadow-2xs ring-1 ring-slate-200/80"
             />
             <span className="text-sm font-extrabold tracking-tight text-slate-900">
-              INNOVARD · {currentTeam.name}
+              INNOVARD · {currentTeam.id ? currentTeam.name : 'Chưa có đội'}
             </span>
           </Link>
           <Link href="/profile">

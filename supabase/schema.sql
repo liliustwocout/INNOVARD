@@ -193,15 +193,32 @@ create policy "Public client access calendar_events" on public.calendar_events
 
 create or replace function public.handle_new_user()
 returns trigger as $$
+declare
+  is_pre_assigned boolean := lower(new.email) in (
+    'datpltn205@gmail.com',
+    '23010163@st.phenikaa-uni.edu.vn',
+    '23010196@st.phenikaa-uni.edu.vn',
+    '23013303@st.phenikaa-uni.edu.vn'
+  );
+  user_role text := case when lower(new.email) = 'datpltn205@gmail.com' then 'admin' else 'member' end;
 begin
-  insert into public.users (id, name, email, avatar_url, role, team_id)
+  insert into public.users (id, name, email, avatar_url, role, team_id, connected_profiles)
   values (
     new.id::text,
     coalesce(new.raw_user_meta_data->>'full_name', new.raw_user_meta_data->>'name', split_part(new.email, '@', 1)),
     new.email,
     coalesce(new.raw_user_meta_data->>'avatar_url', new.raw_user_meta_data->>'picture', ''),
-    case when lower(new.email) = 'datpltn205@gmail.com' then 'admin' else 'member' end,
-    'team-alpha'
+    user_role,
+    case when is_pre_assigned then 'team-alpha' else null end,
+    jsonb_build_object(
+      'github', '',
+      'discord', '',
+      'linkedin', '',
+      'portfolio', '',
+      'systemRole', user_role,
+      'teamAssigned', is_pre_assigned,
+      'pendingJoinRequest', null
+    )
   )
   on conflict (email) do update set
     name = excluded.name,

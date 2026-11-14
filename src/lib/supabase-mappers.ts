@@ -15,6 +15,12 @@ import type {
 } from '@/types/innovard';
 
 export const ADMIN_EMAIL = 'datpltn205@gmail.com';
+export const PRE_ASSIGNED_TEAM_ALPHA_EMAILS = [
+  ADMIN_EMAIL,
+  '23010163@st.phenikaa-uni.edu.vn',
+  '23010196@st.phenikaa-uni.edu.vn',
+  '23013303@st.phenikaa-uni.edu.vn',
+];
 
 export const DEFAULT_SYSTEM_CONFIG: SystemConfig = {
   standupDeadlineTime: '23:59',
@@ -83,6 +89,12 @@ export function isAdminEmail(email?: string | null): boolean {
   return Boolean(email && email.trim().toLowerCase() === ADMIN_EMAIL);
 }
 
+export function isPreAssignedTeamAlphaEmail(email?: string | null): boolean {
+  return Boolean(
+    email && PRE_ASSIGNED_TEAM_ALPHA_EMAILS.includes(email.trim().toLowerCase())
+  );
+}
+
 export function makeAvatarSvg(
   initials: string,
   fromHex: string,
@@ -128,6 +140,17 @@ export function mapUserFromRow(row: Record<string, unknown>): UserProfile {
       ? 'admin'
       : 'member';
 
+  const rawTeamId = typeof row.team_id === 'string' ? row.team_id.trim() : '';
+  const hasExplicitAssignment =
+    connected.teamAssigned === true ||
+    (connected.teamAssigned !== false &&
+      (isPreAssignedTeamAlphaEmail(email) || isAdminEmail(email)));
+  const resolvedTeamId =
+    !rawTeamId || (rawTeamId === 'team-alpha' && !hasExplicitAssignment)
+      ? ''
+      : rawTeamId;
+  const resolvedTeamAssigned = Boolean(resolvedTeamId);
+
   return {
     id: String(row.id),
     name,
@@ -138,13 +161,14 @@ export function mapUserFromRow(row: Record<string, unknown>): UserProfile {
     title: String(row.title ?? 'Thành viên dự án'),
     bio: String(row.bio ?? ''),
     skills: Array.isArray(row.skills) ? row.skills.map(String) : [],
-    teamId: String(row.team_id ?? 'team-alpha'),
+    teamId: resolvedTeamId,
     connectedProfiles: {
       github: String(connected.github ?? ''),
       discord: String(connected.discord ?? ''),
       linkedin: String(connected.linkedin ?? ''),
       portfolio: String(connected.portfolio ?? ''),
       systemRole: resolvedRole,
+      teamAssigned: resolvedTeamAssigned,
       pendingJoinRequest: connected.pendingJoinRequest ?? null,
       systemConfig: connected.systemConfig
         ? normalizeSystemConfig(connected.systemConfig)

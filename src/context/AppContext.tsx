@@ -22,6 +22,7 @@ import {
   DEFAULT_SYSTEM_CONFIG,
   getInitialsFromName,
   isAdminEmail,
+  isPreAssignedTeamAlphaEmail,
   makeAvatarSvg,
   mapAnnouncementFromRow,
   mapEventFromRow,
@@ -46,6 +47,20 @@ const DEFAULT_TEAM: Team = {
   slogan: '',
   description: 'Cập nhật mô tả đề tài và liên kết của đội tại trang Đội của tôi.',
   mentorName: 'Chưa cập nhật',
+  githubRepoUrl: 'https://github.com',
+  discordInviteUrl: 'https://discord.com',
+  progress: 0,
+};
+
+const UNASSIGNED_TEAM: Team = {
+  id: '',
+  code: 'CHƯA CÓ ĐỘI',
+  name: 'Chưa có đội',
+  projectName: 'Chưa tham gia dự án',
+  slogan: '',
+  description:
+    'Bạn chưa thuộc đội nào. Hãy chọn một đội tại trang Đội của tôi để gửi yêu cầu xin gia nhập.',
+  mentorName: 'Chưa phân công',
   githubRepoUrl: 'https://github.com',
   discordInviteUrl: 'https://discord.com',
   progress: 0,
@@ -342,7 +357,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         email?: string;
         user_metadata?: Record<string, unknown>;
       } | null,
-      fallbackTeamId = DEFAULT_TEAM.id
+      fallbackTeamId = ''
     ) => {
       if (!authUser) return;
       const email = (authUser.email ?? 'member@innovard.vn').trim().toLowerCase();
@@ -357,6 +372,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         makeAvatarSvg(getInitialsFromName(fullName), '#4f46e5', '#06b6d4');
 
       const adminAccount = isAdminEmail(email);
+      const preAssigned = adminAccount || isPreAssignedTeamAlphaEmail(email);
 
       const { data: dbRow } = await supabase
         .from('users')
@@ -369,6 +385,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (dbRow) {
         const mapped = mapUserFromRow(dbRow as Record<string, unknown>);
         const nextRole: TeamRole = adminAccount ? 'admin' : mapped.role;
+        const nextTeamId = preAssigned
+          ? mapped.teamId || fallbackTeamId || DEFAULT_TEAM.id
+          : mapped.teamId;
+        const nextTeamAssigned = Boolean(nextTeamId);
         const nextTitle =
           adminAccount && mapped.title === 'Thành viên dự án'
             ? 'Quản trị viên hệ thống (Admin)'
@@ -376,6 +396,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const nextConnected = {
           ...mapped.connectedProfiles,
           systemRole: nextRole,
+          teamAssigned: nextTeamAssigned,
         };
 
         const syncedUser: UserProfile = {
@@ -384,6 +405,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           avatarUrl,
           role: nextRole,
           title: nextTitle,
+          teamId: nextTeamId,
           connectedProfiles: nextConnected,
         };
 
@@ -395,6 +417,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               avatar_url: avatarUrl,
               role: toDbRole(nextRole),
               title: nextTitle,
+              team_id: nextTeamId || null,
               connected_profiles: nextConnected,
               updated_at: new Date().toISOString(),
             })
@@ -406,9 +429,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setState((prev) => {
           const exists = prev.users.some((u) => u.id === syncedUser.id);
           const preferredTeam =
-            nextRole === 'admin'
-              ? prev.currentTeamId
-              : syncedUser.teamId || prev.currentTeamId;
+            nextRole === 'admin' ? prev.currentTeamId : syncedUser.teamId;
           return {
             ...prev,
             users: exists
@@ -425,6 +446,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
 
       const resolvedRole: TeamRole = adminAccount ? 'admin' : 'member';
+      const resolvedTeamId = preAssigned
+        ? fallbackTeamId || DEFAULT_TEAM.id
+        : '';
       const newUser: UserProfile = {
         id: authUser.id,
         name: fullName,
@@ -434,13 +458,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         title: adminAccount ? 'Quản trị viên hệ thống (Admin)' : 'Thành viên dự án',
         bio: 'Đăng nhập qua Google OAuth trên hệ thống INNOVARD.',
         skills: ['Teamwork'],
-        teamId: fallbackTeamId,
+        teamId: resolvedTeamId,
         connectedProfiles: {
           github: '',
           discord: '',
           linkedin: '',
           portfolio: '',
           systemRole: resolvedRole,
+          teamAssigned: Boolean(resolvedTeamId),
           pendingJoinRequest: null,
         },
       };
@@ -456,7 +481,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             title: newUser.title,
             bio: newUser.bio,
             skills: newUser.skills,
-            team_id: newUser.teamId,
+            team_id: newUser.teamId || null,
             connected_profiles: newUser.connectedProfiles,
           },
           { onConflict: 'email' }
@@ -474,7 +499,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           users: exists
             ? prev.users.map((u) =>
                 u.email.toLowerCase() === email.toLowerCase()
-                  ? { ...u, name: fullName, avatarUrl, role: resolvedRole }
+                  ? {
+                      ...u,
+                      name: fullName,
+                      avatarUrl,
+                      role: resolvedRole,
+                      teamId: newUser.teamId,
+                      connectedProfiles: {
+                        ...u.connectedProfiles,
+                        teamAssigned: Boolean(newUser.teamId),
+                      },
+                    }
                   : u
               )
             : [...prev.users, newUser],
@@ -534,10 +569,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const effectiveTeamId = useMemo(() => {
     if (isAdmin) return state.currentTeamId;
-    return currentUser?.teamId || state.currentTeamId;
-  }, [isAdmin, currentUser?.teamId, state.currentTeamId]);
+    if (currentUser) return currentUser.teamId;
+    return state.currentTeamId;
+  }, [isAdmin, currentUser, state.currentTeamId]);
 
   const currentTeam = useMemo(() => {
+    if (!effectiveTeamId) return UNASSIGNED_TEAM;
     return (
       state.teams.find((t) => t.id === effectiveTeamId) ??
       state.teams[0] ??
@@ -740,7 +777,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const updateCurrentUserProfile = (updates: Partial<UserProfile>) => {
     if (!currentUser) return;
     const nextTeamId =
-      isAdmin && updates.teamId ? updates.teamId : currentUser.teamId;
+      isAdmin && updates.teamId !== undefined ? updates.teamId : currentUser.teamId;
     const nextRole: TeamRole = isAdminEmail(currentUser.email)
       ? 'admin'
       : currentUser.role;
@@ -754,6 +791,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         ...currentUser.connectedProfiles,
         ...(updates.connectedProfiles ?? {}),
         systemRole: nextRole,
+        teamAssigned: Boolean(nextTeamId),
         pendingJoinRequest: currentUser.connectedProfiles.pendingJoinRequest ?? null,
       },
     };
@@ -763,7 +801,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       users: prev.users.map((u) =>
         u.id === currentUser.id ? mergedProfile : u
       ),
-      currentTeamId: isAdmin ? nextTeamId : prev.currentTeamId,
+      currentTeamId: isAdmin ? nextTeamId || prev.currentTeamId : prev.currentTeamId,
     }));
 
     const supabase = getSupabaseClient();
@@ -777,7 +815,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             title: mergedProfile.title,
             bio: mergedProfile.bio,
             skills: mergedProfile.skills,
-            team_id: mergedProfile.teamId,
+            team_id: mergedProfile.teamId || null,
             connected_profiles: mergedProfile.connectedProfiles,
             updated_at: new Date().toISOString(),
           })
@@ -941,8 +979,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const assignedRole: TeamRole = isAdminEmail(member.email)
       ? 'admin'
       : member.role;
+    const assignedTeamId = member.teamId || '';
     const newMember: UserProfile = {
       ...member,
+      teamId: assignedTeamId,
       id: `user-${Date.now()}`,
       role: assignedRole,
       avatarUrl:
@@ -951,6 +991,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       connectedProfiles: {
         ...member.connectedProfiles,
         systemRole: assignedRole,
+        teamAssigned: Boolean(assignedTeamId),
         pendingJoinRequest: null,
       },
     };
@@ -971,7 +1012,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           title: newMember.title,
           bio: newMember.bio,
           skills: newMember.skills,
-          team_id: newMember.teamId,
+          team_id: newMember.teamId || null,
           connected_profiles: newMember.connectedProfiles,
         }),
         'addTeamMember'
@@ -987,15 +1028,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const enforcedRole: TeamRole = isAdminEmail(target.email)
       ? 'admin'
       : updates.role ?? target.role;
+    const nextTeamId = updates.teamId !== undefined ? updates.teamId : target.teamId;
 
     const merged: UserProfile = {
       ...target,
       ...updates,
       role: enforcedRole,
+      teamId: nextTeamId,
       connectedProfiles: {
         ...target.connectedProfiles,
         ...(updates.connectedProfiles ?? {}),
         systemRole: enforcedRole,
+        teamAssigned: Boolean(nextTeamId),
       },
     };
 
@@ -1015,7 +1059,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             title: merged.title,
             bio: merged.bio,
             skills: merged.skills,
-            team_id: merged.teamId,
+            team_id: merged.teamId || null,
             connected_profiles: merged.connectedProfiles,
             updated_at: new Date().toISOString(),
           })
@@ -1140,6 +1184,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const nextTeamId = decision === 'approved' ? req.toTeamId : target.teamId;
     const nextConnected = {
       ...target.connectedProfiles,
+      teamAssigned: Boolean(nextTeamId),
       pendingJoinRequest: null,
     };
 
@@ -1158,7 +1203,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         supabase
           .from('users')
           .update({
-            team_id: nextTeamId,
+            team_id: nextTeamId || null,
             connected_profiles: nextConnected,
             updated_at: new Date().toISOString(),
           })
@@ -1172,6 +1217,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     ann: Omit<Announcement, 'id' | 'createdAt' | 'authorName' | 'authorAvatar'>
   ) => {
     if (!currentUser) return;
+    if (!isAdmin && !currentTeam.id) return;
     const resolvedTeamId = isAdmin ? ann.teamId : currentTeam.id;
     const newAnn: Announcement = {
       ...ann,
@@ -1248,6 +1294,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const addMilestone = (payload: Omit<ScheduleMilestone, 'id'>) => {
+    if (!isAdmin && !currentTeam.id) return;
     const newMilestone: ScheduleMilestone = {
       ...payload,
       teamId: isAdmin ? payload.teamId : currentTeam.id,
@@ -1298,6 +1345,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const addQuickLink = (payload: Omit<QuickLink, 'id' | 'iconName'>) => {
+    if (!isAdmin && !currentTeam.id) return;
     const newLink: QuickLink = {
       ...payload,
       teamId: isAdmin ? payload.teamId : currentTeam.id,
@@ -1352,7 +1400,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     blockers: string;
     date?: string;
   }) => {
-    if (!currentUser) return;
+    if (!currentUser || !currentTeam.id) return;
     const todayISO = getTodayISO();
     const resolvedDate =
       !isAdmin && !state.systemConfig.allowBackdateStandup
@@ -1462,9 +1510,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     >
   ) => {
     if (!currentUser) return;
+    const resolvedTeamId = isAdmin ? payload.teamId : currentTeam.id;
+    if (!resolvedTeamId) return;
     const newReport: TeamMeetingReport = {
       ...payload,
-      teamId: isAdmin ? payload.teamId : currentTeam.id,
+      teamId: resolvedTeamId,
       id: `rep-${Date.now()}`,
       authorId: currentUser.id,
       authorName: currentUser.name,
@@ -1558,6 +1608,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (!currentUser) return;
     const assignedUserId = isAdmin ? payload.userId : currentUser.id;
     const assignedTeamId = isAdmin ? payload.teamId : currentTeam.id;
+    if (!assignedTeamId) return;
     const newTask: MemberTask = {
       ...payload,
       id: `task-${Date.now()}`,
@@ -1663,6 +1714,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const addCalendarEvent = (payload: Omit<CalendarEvent, 'id'>) => {
+    if (!isAdmin && !currentTeam.id) return;
     const newEvent: CalendarEvent = {
       ...payload,
       teamId: isAdmin ? payload.teamId : currentTeam.id,

@@ -79,7 +79,7 @@ export default function HomePage() {
 
   const visibleAnnouncements = useMemo(() => {
     return announcements
-      .filter((a) => a.teamId === null || a.teamId === currentTeam.id)
+      .filter((a) => a.teamId === null || (Boolean(currentTeam.id) && a.teamId === currentTeam.id))
       .filter((a) => categoryFilter === 'all' || a.category === categoryFilter)
       .sort((a, b) => {
         if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
@@ -88,16 +88,20 @@ export default function HomePage() {
   }, [announcements, currentTeam.id, categoryFilter]);
 
   const visibleMilestones = useMemo(() => {
-    return milestones.filter((m) => m.teamId === null || m.teamId === currentTeam.id);
+    return milestones.filter(
+      (m) => m.teamId === null || (Boolean(currentTeam.id) && m.teamId === currentTeam.id)
+    );
   }, [milestones, currentTeam.id]);
 
   const visibleLinks = useMemo(() => {
-    return quickLinks.filter((l) => l.teamId === null || l.teamId === currentTeam.id);
+    return quickLinks.filter(
+      (l) => l.teamId === null || (Boolean(currentTeam.id) && l.teamId === currentTeam.id)
+    );
   }, [quickLinks, currentTeam.id]);
 
   const upcomingEvents = useMemo(() => {
     return events
-      .filter((e) => e.teamId === null || e.teamId === currentTeam.id)
+      .filter((e) => e.teamId === null || (Boolean(currentTeam.id) && e.teamId === currentTeam.id))
       .slice(0, 4);
   }, [events, currentTeam.id]);
 
@@ -172,8 +176,14 @@ export default function HomePage() {
               />
             )}
             <div>
-              <span className="inline-block rounded-full bg-indigo-50 px-3 py-0.5 text-xs font-semibold text-indigo-700">
-                {currentTeam.name} · {currentTeam.code}
+              <span
+                className={`inline-block rounded-full px-3 py-0.5 text-xs font-semibold ${
+                  currentTeam.id
+                    ? 'bg-indigo-50 text-indigo-700'
+                    : 'bg-amber-50 text-amber-800'
+                }`}
+              >
+                {currentTeam.id ? `${currentTeam.name} · ${currentTeam.code}` : 'Chưa có đội'}
               </span>
               <h1 className="mt-1.5 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
                 Trang chủ INNOVARD
@@ -185,12 +195,21 @@ export default function HomePage() {
           </div>
 
           <div className="flex flex-wrap gap-2.5">
-            <Link
-              href="/project/submissions"
-              className="rounded-xl bg-indigo-600 px-4 py-2.5 text-xs font-semibold text-white shadow-xs transition hover:bg-indigo-700 sm:text-sm"
-            >
-              Nộp Daily Standup
-            </Link>
+            {currentTeam.id ? (
+              <Link
+                href="/project/submissions"
+                className="rounded-xl bg-indigo-600 px-4 py-2.5 text-xs font-semibold text-white shadow-xs transition hover:bg-indigo-700 sm:text-sm"
+              >
+                Nộp Daily Standup
+              </Link>
+            ) : (
+              <Link
+                href="/team"
+                className="rounded-xl bg-indigo-600 px-4 py-2.5 text-xs font-semibold text-white shadow-xs transition hover:bg-indigo-700 sm:text-sm"
+              >
+                Chọn đội để xin gia nhập
+              </Link>
+            )}
             <Link
               href="/overview"
               className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-100 sm:text-sm"
@@ -201,6 +220,25 @@ export default function HomePage() {
         </div>
       </section>
 
+      {!isAdmin && !currentTeam.id && (
+        <section className="flex flex-col justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50/70 p-4 sm:flex-row sm:items-center">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wider text-amber-800">
+              Bạn chưa thuộc đội nào
+            </p>
+            <p className="mt-0.5 text-xs text-slate-700">
+              Tài khoản mới đăng nhập sẽ ở trạng thái Chưa có đội. Hãy chọn một đội ở trang Đội của tôi và gửi yêu cầu gia nhập để Admin phê duyệt.
+            </p>
+          </div>
+          <Link
+            href="/team"
+            className="shrink-0 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-700"
+          >
+            Chọn đội ngay
+          </Link>
+        </section>
+      )}
+
       {/* Main 2-column grid */}
       <div className="grid gap-6 lg:grid-cols-12">
         {/* Announcements Column */}
@@ -209,17 +247,21 @@ export default function HomePage() {
             <div>
               <h2 className="text-lg font-bold text-slate-900">Thông báo</h2>
               <p className="text-xs text-slate-500">
-                Tin tức chung toàn chương trình & riêng đội {currentTeam.name}
+                {currentTeam.id
+                  ? `Tin tức chung toàn chương trình & riêng đội ${currentTeam.name}`
+                  : 'Tin tức chung toàn chương trình'}
               </p>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setShowNewModal(true)}
-              className="rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-semibold text-white shadow-xs transition hover:bg-indigo-700"
-            >
-              Đăng thông báo
-            </button>
+            {Boolean(isAdmin || currentTeam.id) && (
+              <button
+                type="button"
+                onClick={() => setShowNewModal(true)}
+                className="rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-semibold text-white shadow-xs transition hover:bg-indigo-700"
+              >
+                Đăng thông báo
+              </button>
+            )}
           </div>
 
           {/* Filter pills */}

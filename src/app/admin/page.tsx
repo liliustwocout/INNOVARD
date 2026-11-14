@@ -499,8 +499,9 @@ export default function AdminPage() {
             </div>
           ) : (
             joinRequests.map((req) => {
-              const fromTeamName =
-                teams.find((t) => t.id === req.fromTeamId)?.name ?? req.fromTeamId;
+              const fromTeamName = req.fromTeamId
+                ? teams.find((t) => t.id === req.fromTeamId)?.name ?? req.fromTeamId
+                : 'Chưa có đội';
               return (
                 <article
                   key={req.id}
@@ -729,6 +730,7 @@ export default function AdminPage() {
                         }
                         className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:border-indigo-500"
                       >
+                        <option value="">Chưa có đội</option>
                         {teams.map((t) => (
                           <option key={t.id} value={t.id}>
                             {t.name} ({t.code})

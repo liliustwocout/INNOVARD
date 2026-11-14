@@ -343,13 +343,14 @@ export default function CalendarPage() {
   const [evLocation, setEvLocation] = useState('');
 
   const teamMembers = useMemo(
-    () => users.filter((u) => u.teamId === currentTeam.id),
+    () => (currentTeam.id ? users.filter((u) => u.teamId === currentTeam.id) : []),
     [users, currentTeam.id]
   );
 
   // Group standups by date within the active team
   const standupsByDate = useMemo(() => {
     const map = new Map<string, DailyStandup[]>();
+    if (!currentTeam.id) return map;
     for (const s of standups) {
       if (s.teamId !== currentTeam.id) continue;
       const list = map.get(s.date) ?? [];
@@ -362,7 +363,9 @@ export default function CalendarPage() {
   // Scoped and categorized events
   const enrichedEvents = useMemo(() => {
     return events
-      .filter((e) => e.teamId === null || e.teamId === currentTeam.id)
+      .filter(
+        (e) => e.teamId === null || (Boolean(currentTeam.id) && e.teamId === currentTeam.id)
+      )
       .map((ev) => {
         const meta = parseEventMeta(ev);
         return {
@@ -588,7 +591,9 @@ export default function CalendarPage() {
             Lịch <span className="italic text-indigo-600">sự kiện</span>
           </h1>
           <p className="mt-1.5 max-w-3xl text-xs leading-relaxed text-slate-500 sm:text-sm">
-            Mọi thứ của đội {currentTeam.name} và chương trình nằm chung một chỗ: buổi coaching, mentoring 1-1, hạn nộp Daily Standup ({systemConfig.standupDeadlineTime}), báo cáo tuần và các sự kiện khác. Bấm vào nhãn bên dưới để ẩn bớt loại bạn không cần xem. Giờ trên lịch là giờ Việt Nam.
+            {currentTeam.id
+              ? `Mọi thứ của đội ${currentTeam.name} và chương trình nằm chung một chỗ: buổi coaching, mentoring 1-1, hạn nộp Daily Standup (${systemConfig.standupDeadlineTime}), báo cáo tuần và các sự kiện khác. Bấm vào nhãn bên dưới để ẩn bớt loại bạn không cần xem. Giờ trên lịch là giờ Việt Nam.`
+              : `Lịch sự kiện chung của chương trình, buổi coaching, mentoring 1-1 và hạn nộp Daily Standup (${systemConfig.standupDeadlineTime}). Bạn chưa có đội nên chỉ hiển thị các sự kiện toàn chương trình. Giờ trên lịch là giờ Việt Nam.`}
           </p>
         </div>
 

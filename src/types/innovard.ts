@@ -57,6 +57,7 @@ export interface ConnectedProfiles {
   linkedin: string;
   portfolio: string;
   systemRole?: TeamRole;
+  teamAssigned?: boolean;
   pendingJoinRequest?: TeamJoinRequest | null;
   systemConfig?: SystemConfig;
 }

@@ -49,7 +49,7 @@ export default function OverviewPage() {
   const todayISO = getTodayISO();
 
   const teamMembers = useMemo(
-    () => users.filter((u) => u.teamId === currentTeam.id),
+    () => (currentTeam.id ? users.filter((u) => u.teamId === currentTeam.id) : []),
     [users, currentTeam.id]
   );
 
@@ -69,7 +69,7 @@ export default function OverviewPage() {
 
   // 3. Tiến độ của tôi (%)
   const myProgressPercent = useMemo(() => {
-    if (!currentUser) return 0;
+    if (!currentUser || !currentTeam.id) return 0;
     const myTasks = tasks.filter(
       (t) => t.userId === currentUser.id && t.teamId === currentTeam.id
     );
@@ -80,7 +80,7 @@ export default function OverviewPage() {
   }, [tasks, currentUser, currentTeam.id]);
 
   const hasSubmittedStandupToday = useMemo(() => {
-    if (!currentUser) return false;
+    if (!currentUser || !currentTeam.id) return false;
     return standups.some(
       (s) =>
         s.userId === currentUser.id &&
@@ -95,7 +95,7 @@ export default function OverviewPage() {
       .filter(
         (ev) =>
           ev.type === 'deadline' &&
-          (ev.teamId === null || ev.teamId === currentTeam.id)
+          (ev.teamId === null || (Boolean(currentTeam.id) && ev.teamId === currentTeam.id))
       )
       .sort((a, b) => a.date.localeCompare(b.date));
 
@@ -121,7 +121,7 @@ export default function OverviewPage() {
       href: '/calendar',
     }));
 
-    return [standupRow, ...eventRows];
+    return currentTeam.id ? [standupRow, ...eventRows] : eventRows;
   }, [
     events,
     currentTeam.id,
@@ -133,9 +133,10 @@ export default function OverviewPage() {
   ]);
 
   const teamCodeBadge = useMemo(() => {
+    if (!currentTeam.id) return '--';
     const match = currentTeam.code.match(/\d+/);
     return match ? match[0].padStart(2, '0') : currentTeam.code;
-  }, [currentTeam.code]);
+  }, [currentTeam.id, currentTeam.code]);
 
   const repoShortName = extractRepoShortName(currentTeam.githubRepoUrl);
 
@@ -244,97 +245,149 @@ export default function OverviewPage() {
         </div>
 
         <div className="divide-y divide-slate-100">
-          {deadlineRows.map((row) => {
-            const countdown = formatLiveCountdown(row.date, row.time, nowMs);
-            const countdownColor =
-              countdown.tone === 'urgent'
-                ? 'text-rose-600'
-                : countdown.tone === 'soon'
-                ? 'text-amber-600'
-                : countdown.tone === 'past'
-                ? 'text-slate-400'
-                : 'text-slate-600';
+          {deadlineRows.length === 0 ? (
+            <p className="py-4 text-xs text-slate-500">
+              Chưa có deadline nào sắp đến. Hãy chọn đội tại trang Đội của tôi để theo dõi hạn nộp nhóm.
+            </p>
+          ) : (
+            deadlineRows.map((row) => {
+              const countdown = formatLiveCountdown(row.date, row.time, nowMs);
+              const countdownColor =
+                countdown.tone === 'urgent'
+                  ? 'text-rose-600'
+                  : countdown.tone === 'soon'
+                  ? 'text-amber-600'
+                  : countdown.tone === 'past'
+                  ? 'text-slate-400'
+                  : 'text-slate-600';
 
-            return (
-              <Link
-                key={row.id}
-                href={row.href}
-                className="flex flex-col gap-2 py-4 transition hover:bg-slate-50/70 sm:flex-row sm:items-center sm:justify-between sm:px-2 sm:rounded-xl"
-              >
-                <div>
-                  <p className="text-sm font-semibold text-slate-900">
-                    {row.title}
-                  </p>
-                  <p className="mt-0.5 text-xs text-slate-500">{row.subtitle}</p>
-                </div>
+              return (
+                <Link
+                  key={row.id}
+                  href={row.href}
+                  className="flex flex-col gap-2 py-4 transition hover:bg-slate-50/70 sm:flex-row sm:items-center sm:justify-between sm:px-2 sm:rounded-xl"
+                >
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">
+                      {row.title}
+                    </p>
+                    <p className="mt-0.5 text-xs text-slate-500">{row.subtitle}</p>
+                  </div>
 
-                <div className="shrink-0 text-left sm:text-right">
-                  {row.completed ? (
-                    <span className="text-xs font-bold text-emerald-600">
-                      {row.completedText}
-                    </span>
-                  ) : (
-                    <span
-                      className={`font-mono text-xs font-bold tabular-nums ${countdownColor}`}
-                    >
-                      {countdown.text}
-                    </span>
-                  )}
-                </div>
-              </Link>
-            );
-          })}
+                  <div className="shrink-0 text-left sm:text-right">
+                    {row.completed ? (
+                      <span className="text-xs font-bold text-emerald-600">
+                        {row.completedText}
+                      </span>
+                    ) : (
+                      <span
+                        className={`font-mono text-xs font-bold tabular-nums ${countdownColor}`}
+                      >
+                        {countdown.text}
+                      </span>
+                    )}
+                  </div>
+                </Link>
+              );
+            })
+          )}
         </div>
       </section>
 
-      {/* Tầng 4: 2 Thẻ Liên kết nhanh (GITHUB REPO & DISCORD) */}
-      <section className="grid gap-4 md:grid-cols-2">
-        <a
-          href={currentTeam.githubRepoUrl}
-          target="_blank"
-          rel="noreferrer"
-          data-tour="overview-github"
-          className="group flex items-center justify-between gap-4 rounded-2xl border border-slate-200/90 bg-white p-5 shadow-xs transition hover:border-indigo-300"
-        >
-          <div className="min-w-0">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-              GITHUB REPO
-            </p>
-            <p className="mt-1 truncate text-base font-bold text-slate-900 group-hover:text-indigo-700">
-              {repoShortName}
-            </p>
-            <p className="mt-1 text-xs text-slate-500">
-              Kho mã nguồn chính thức của đội {currentTeam.name}.
-            </p>
-          </div>
-          <span className="shrink-0 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 group-hover:border-indigo-200 group-hover:bg-indigo-50 group-hover:text-indigo-700">
-            Mở liên kết
-          </span>
-        </a>
+      {/* Tầng 4: 2 Thẻ Liên kết nhanh */}
+      {currentTeam.id ? (
+        <section className="grid gap-4 md:grid-cols-2">
+          <a
+            href={currentTeam.githubRepoUrl}
+            target="_blank"
+            rel="noreferrer"
+            data-tour="overview-github"
+            className="group flex items-center justify-between gap-4 rounded-2xl border border-slate-200/90 bg-white p-5 shadow-xs transition hover:border-indigo-300"
+          >
+            <div className="min-w-0">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                GITHUB REPO
+              </p>
+              <p className="mt-1 truncate text-base font-bold text-slate-900 group-hover:text-indigo-700">
+                {repoShortName}
+              </p>
+              <p className="mt-1 text-xs text-slate-500">
+                Kho mã nguồn chính thức của đội {currentTeam.name}.
+              </p>
+            </div>
+            <span className="shrink-0 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 group-hover:border-indigo-200 group-hover:bg-indigo-50 group-hover:text-indigo-700">
+              Mở liên kết
+            </span>
+          </a>
 
-        <a
-          href={currentTeam.discordInviteUrl}
-          target="_blank"
-          rel="noreferrer"
-          data-tour="overview-discord"
-          className="group flex items-center justify-between gap-4 rounded-2xl border border-slate-200/90 bg-white p-5 shadow-xs transition hover:border-indigo-300"
-        >
-          <div className="min-w-0">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-              DISCORD
-            </p>
-            <p className="mt-1 truncate text-base font-bold text-slate-900 group-hover:text-indigo-700">
-              Tham gia server
-            </p>
-            <p className="mt-1 truncate text-xs text-slate-500">
-              Kênh họp & trao đổi nhanh của đội {currentTeam.name}.
-            </p>
-          </div>
-          <span className="shrink-0 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 group-hover:border-indigo-200 group-hover:bg-indigo-50 group-hover:text-indigo-700">
-            Tham gia
-          </span>
-        </a>
-      </section>
+          <a
+            href={currentTeam.discordInviteUrl}
+            target="_blank"
+            rel="noreferrer"
+            data-tour="overview-discord"
+            className="group flex items-center justify-between gap-4 rounded-2xl border border-slate-200/90 bg-white p-5 shadow-xs transition hover:border-indigo-300"
+          >
+            <div className="min-w-0">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                DISCORD
+              </p>
+              <p className="mt-1 truncate text-base font-bold text-slate-900 group-hover:text-indigo-700">
+                Tham gia server
+              </p>
+              <p className="mt-1 truncate text-xs text-slate-500">
+                Kênh họp & trao đổi nhanh của đội {currentTeam.name}.
+              </p>
+            </div>
+            <span className="shrink-0 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 group-hover:border-indigo-200 group-hover:bg-indigo-50 group-hover:text-indigo-700">
+              Tham gia
+            </span>
+          </a>
+        </section>
+      ) : (
+        <section className="grid gap-4 md:grid-cols-2">
+          <Link
+            href="/team"
+            data-tour="overview-github"
+            className="group flex items-center justify-between gap-4 rounded-2xl border border-amber-200 bg-amber-50/70 p-5 shadow-xs transition hover:border-amber-300"
+          >
+            <div className="min-w-0">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-amber-700">
+                CHƯA CÓ ĐỘI
+              </p>
+              <p className="mt-1 truncate text-base font-bold text-slate-900 group-hover:text-indigo-700">
+                Chọn đội để xin gia nhập
+              </p>
+              <p className="mt-1 text-xs text-slate-600">
+                Gửi yêu cầu vào một đội đang mở để Admin phê duyệt.
+              </p>
+            </div>
+            <span className="shrink-0 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white group-hover:bg-indigo-700">
+              Vào trang Đội
+            </span>
+          </Link>
+
+          <Link
+            href="/calendar"
+            data-tour="overview-discord"
+            className="group flex items-center justify-between gap-4 rounded-2xl border border-slate-200/90 bg-white p-5 shadow-xs transition hover:border-indigo-300"
+          >
+            <div className="min-w-0">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                LỊCH CHƯƠNG TRÌNH
+              </p>
+              <p className="mt-1 truncate text-base font-bold text-slate-900 group-hover:text-indigo-700">
+                Xem lịch sự kiện chung
+              </p>
+              <p className="mt-1 truncate text-xs text-slate-500">
+                Theo dõi các buổi workshop, coaching & mốc chung.
+              </p>
+            </div>
+            <span className="shrink-0 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 group-hover:border-indigo-200 group-hover:bg-indigo-50 group-hover:text-indigo-700">
+              Xem lịch
+            </span>
+          </Link>
+        </section>
+      )}
 
       {/* Tầng 5: Khối ĐỘI CỦA TÔI (2 cột trong 1 khung lớn) */}
       <section data-tour="overview-my-team" className="relative pt-3">
@@ -342,6 +395,51 @@ export default function OverviewPage() {
           ĐỘI CỦA TÔI
         </span>
 
+        {!currentTeam.id ? (
+          <div className="grid gap-6 rounded-2xl border border-amber-200 bg-white p-6 pt-8 shadow-xs lg:grid-cols-12">
+            <div className="flex flex-col justify-between gap-4 border-b border-slate-100 pb-5 lg:col-span-5 lg:border-r lg:border-b-0 lg:pr-6 lg:pb-0">
+              <div className="flex items-start gap-4">
+                <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-amber-50 text-xl font-extrabold text-amber-700 ring-1 ring-amber-200">
+                  {teamCodeBadge}
+                </div>
+                <div className="min-w-0">
+                  <h2 className="text-lg font-extrabold text-slate-900">
+                    {currentTeam.name}
+                  </h2>
+                  <p className="mt-0.5 text-xs font-semibold text-amber-700">
+                    {currentTeam.projectName}
+                  </p>
+                  <p className="mt-1.5 text-xs leading-relaxed text-slate-500">
+                    {currentTeam.description}
+                  </p>
+                </div>
+              </div>
+              <Link
+                href="/team"
+                className="inline-flex w-fit items-center rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-700"
+              >
+                Chọn đội để xin gia nhập
+              </Link>
+            </div>
+
+            <div className="space-y-3 lg:col-span-7">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                  Thành viên trong nhóm (0)
+                </h3>
+                <Link
+                  href="/team"
+                  className="text-xs font-semibold text-indigo-600 hover:underline"
+                >
+                  Danh sách đội
+                </Link>
+              </div>
+              <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/70 p-6 text-center text-xs leading-relaxed text-slate-500">
+                Tài khoản mới đăng nhập sẽ không bị tự động gán vào đội có sẵn. Sau khi Admin phê duyệt yêu cầu gia nhập hoặc xếp đội cho bạn, thành viên cùng nhóm sẽ xuất hiện tại đây.
+              </div>
+            </div>
+          </div>
+        ) : (
         <div className="grid gap-6 rounded-2xl border border-slate-200/90 bg-white p-6 pt-8 shadow-xs lg:grid-cols-12">
           {/* Cột trái: Thông tin đội */}
           <div className="flex flex-col justify-between gap-4 border-b border-slate-100 pb-5 lg:col-span-5 lg:border-r lg:border-b-0 lg:pr-6 lg:pb-0">
@@ -452,6 +550,7 @@ export default function OverviewPage() {
             </div>
           </div>
         </div>
+        )}
       </section>
     </div>
   );

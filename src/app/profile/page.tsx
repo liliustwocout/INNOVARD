@@ -173,13 +173,13 @@ export default function ProfilePage() {
               ) : (
                 <div className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5">
                   <span className="text-sm font-medium text-slate-800">
-                    {currentTeam.name} ({currentTeam.code})
+                    {currentTeam.id ? `${currentTeam.name} (${currentTeam.code})` : 'Chưa có đội'}
                   </span>
                   <Link
                     href="/team"
                     className="shrink-0 text-xs font-semibold text-indigo-600 hover:text-indigo-700"
                   >
-                    Xin gia nhập đội khác
+                    {currentTeam.id ? 'Xin gia nhập đội khác' : 'Chọn đội để xin gia nhập'}
                   </Link>
                 </div>
               )}

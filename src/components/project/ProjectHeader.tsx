@@ -16,22 +16,39 @@ export function ProjectHeader({ activeTab, onTabSelect }: ProjectHeaderProps) {
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <span className="inline-block rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">
-            {currentTeam.name} · {currentTeam.code}
+          <span
+            className={`inline-block rounded-full px-3 py-1 text-xs font-semibold ${
+              currentTeam.id
+                ? 'bg-indigo-50 text-indigo-700'
+                : 'bg-amber-50 text-amber-800'
+            }`}
+          >
+            {currentTeam.id ? `${currentTeam.name} · ${currentTeam.code}` : 'Chưa có đội'}
           </span>
           <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-900">
-            Dự án: {currentTeam.projectName}
+            {currentTeam.id
+              ? `Dự án: ${currentTeam.projectName}`
+              : 'Bạn chưa tham gia dự án của đội nào'}
           </h1>
         </div>
 
-        <a
-          href={currentTeam.githubRepoUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="self-start rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 sm:text-sm"
-        >
-          Repo nhóm
-        </a>
+        {currentTeam.id ? (
+          <a
+            href={currentTeam.githubRepoUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="self-start rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 sm:text-sm"
+          >
+            Repo nhóm
+          </a>
+        ) : (
+          <Link
+            href="/team"
+            className="self-start rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-indigo-700 sm:text-sm"
+          >
+            Chọn đội để xin gia nhập
+          </Link>
+        )}
       </div>
 
       {/* Sub-page Tabs */}
