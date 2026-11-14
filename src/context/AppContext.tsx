@@ -5,6 +5,7 @@ import type {
   ActivityLogItem,
   Announcement,
   CalendarEvent,
+  ConnectedProfiles,
   DailyStandup,
   MemberTask,
   QuickLink,
@@ -209,7 +210,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     let isMounted = true;
 
-    const loadDatabaseState = async (): Promise<Team[]> => {
+    const loadDatabaseState = async (useSavedTeam = true): Promise<Team[]> => {
       try {
         const [
           teamsRes,
@@ -311,7 +312,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 )
               : prev.events;
 
-          const preferredTeamId = savedTeamId || prev.currentTeamId;
+          const preferredTeamId =
+            (useSavedTeam
+              ? savedTeamId || prev.currentTeamId
+              : prev.currentTeamId || savedTeamId) ?? '';
           const validTeamId = nextTeams.some((t) => t.id === preferredTeamId)
             ? preferredTeamId
             : nextTeams[0].id;
@@ -522,7 +526,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     const initialize = async () => {
       try {
-        const loadedTeams = await loadDatabaseState();
+        const loadedTeams = await loadDatabaseState(true);
         const fallbackTeamId = loadedTeams[0]?.id ?? DEFAULT_TEAM.id;
         const { data } = await supabase.auth.getSession();
         if (data.session?.user) {
@@ -539,6 +543,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     void initialize();
 
+    const refreshFromDb = () => {
+      if (!isMounted) return;
+      void loadDatabaseState(false);
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        refreshFromDb();
+      }
+    };
+
+    window.addEventListener('focus', refreshFromDb);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    const syncInterval = window.setInterval(refreshFromDb, 15000);
+
     const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_OUT') {
         if (isMounted) {
@@ -553,6 +572,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     return () => {
       isMounted = false;
+      window.removeEventListener('focus', refreshFromDb);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.clearInterval(syncInterval);
       listener.subscription.unsubscribe();
     };
   }, []);
@@ -976,47 +998,166 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const addTeamMember = (member: Omit<UserProfile, 'id'>) => {
     if (!isAdmin) return;
-    const assignedRole: TeamRole = isAdminEmail(member.email)
+    const normalizedEmail = member.email.trim().toLowerCase();
+    if (!normalizedEmail) return;
+
+    const assignedRole: TeamRole = isAdminEmail(normalizedEmail)
       ? 'admin'
       : member.role;
     const assignedTeamId = member.teamId || '';
-    const newMember: UserProfile = {
+    const existingLocal = state.users.find(
+      (u) => u.email.trim().toLowerCase() === normalizedEmail
+    );
+
+    const tempId = existingLocal?.id ?? `user-${Date.now()}`;
+    const optimisticMember: UserProfile = {
+      ...existingLocal,
       ...member,
+      id: tempId,
+      email: normalizedEmail,
+      name: member.name.trim() || existingLocal?.name || normalizedEmail.split('@')[0],
       teamId: assignedTeamId,
-      id: `user-${Date.now()}`,
       role: assignedRole,
       avatarUrl:
+        existingLocal?.avatarUrl ||
         member.avatarUrl ||
-        makeAvatarSvg(getInitialsFromName(member.name), '#0ea5e9', '#6366f1'),
+        makeAvatarSvg(getInitialsFromName(member.name || normalizedEmail), '#0ea5e9', '#6366f1'),
+      title: member.title.trim() || existingLocal?.title || 'Thành viên dự án',
+      bio: member.bio.trim() || existingLocal?.bio || '',
+      skills:
+        member.skills.length > 0 ? member.skills : existingLocal?.skills ?? [],
       connectedProfiles: {
+        ...existingLocal?.connectedProfiles,
         ...member.connectedProfiles,
         systemRole: assignedRole,
         teamAssigned: Boolean(assignedTeamId),
         pendingJoinRequest: null,
       },
     };
-    setState((prev) => ({
-      ...prev,
-      users: [...prev.users, newMember],
-    }));
+
+    setState((prev) => {
+      const idx = prev.users.findIndex(
+        (u) => u.email.trim().toLowerCase() === normalizedEmail
+      );
+      return {
+        ...prev,
+        users:
+          idx >= 0
+            ? prev.users.map((u, i) => (i === idx ? optimisticMember : u))
+            : [...prev.users, optimisticMember],
+      };
+    });
 
     const supabase = getSupabaseClient();
     if (supabase) {
-      void runDbWrite(
-        supabase.from('users').insert({
-          id: newMember.id,
-          name: newMember.name,
-          email: newMember.email,
-          avatar_url: newMember.avatarUrl,
-          role: toDbRole(assignedRole),
-          title: newMember.title,
-          bio: newMember.bio,
-          skills: newMember.skills,
-          team_id: newMember.teamId || null,
-          connected_profiles: newMember.connectedProfiles,
-        }),
-        'addTeamMember'
-      );
+      void (async () => {
+        try {
+          const { data: existingRow, error: lookupError } = await supabase
+            .from('users')
+            .select('*')
+            .ilike('email', normalizedEmail)
+            .maybeSingle();
+
+          if (lookupError) {
+            console.error('[INNOVARD DB] addTeamMember lookup:', lookupError.message);
+          }
+
+          if (existingRow) {
+            const mapped = mapUserFromRow(existingRow as Record<string, unknown>);
+            const mergedRole: TeamRole = isAdminEmail(mapped.email)
+              ? 'admin'
+              : assignedRole;
+            const mergedConnected: ConnectedProfiles = {
+              ...mapped.connectedProfiles,
+              ...member.connectedProfiles,
+              github: member.connectedProfiles.github || mapped.connectedProfiles.github,
+              discord: member.connectedProfiles.discord || mapped.connectedProfiles.discord,
+              systemRole: mergedRole,
+              teamAssigned: Boolean(assignedTeamId),
+              pendingJoinRequest: null,
+            };
+
+            const { data: updatedRow, error: updateError } = await supabase
+              .from('users')
+              .update({
+                name: member.name.trim() || mapped.name,
+                role: toDbRole(mergedRole),
+                title: member.title.trim() || mapped.title,
+                bio: member.bio.trim() || mapped.bio,
+                skills: member.skills.length > 0 ? member.skills : mapped.skills,
+                team_id: assignedTeamId || null,
+                connected_profiles: mergedConnected,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', mapped.id)
+              .select('*')
+              .maybeSingle();
+
+            if (updateError) {
+              console.error('[INNOVARD DB] addTeamMember update:', updateError.message);
+              return;
+            }
+
+            if (updatedRow) {
+              const synced = mapUserFromRow(updatedRow as Record<string, unknown>);
+              setState((prev) => {
+                const withoutEmailDuplicates = prev.users.filter(
+                  (u) =>
+                    u.id === synced.id ||
+                    u.email.trim().toLowerCase() !== normalizedEmail
+                );
+                const exists = withoutEmailDuplicates.some((u) => u.id === synced.id);
+                return {
+                  ...prev,
+                  users: exists
+                    ? withoutEmailDuplicates.map((u) =>
+                        u.id === synced.id ? synced : u
+                      )
+                    : [...withoutEmailDuplicates, synced],
+                };
+              });
+            }
+            return;
+          }
+
+          const { data: upsertedRow, error: upsertError } = await supabase
+            .from('users')
+            .upsert(
+              {
+                id: optimisticMember.id,
+                name: optimisticMember.name,
+                email: normalizedEmail,
+                avatar_url: optimisticMember.avatarUrl,
+                role: toDbRole(assignedRole),
+                title: optimisticMember.title,
+                bio: optimisticMember.bio,
+                skills: optimisticMember.skills,
+                team_id: optimisticMember.teamId || null,
+                connected_profiles: optimisticMember.connectedProfiles,
+              },
+              { onConflict: 'email' }
+            )
+            .select('*')
+            .maybeSingle();
+
+          if (upsertError) {
+            console.error('[INNOVARD DB] addTeamMember upsert:', upsertError.message);
+            return;
+          }
+
+          if (upsertedRow) {
+            const synced = mapUserFromRow(upsertedRow as Record<string, unknown>);
+            setState((prev) => ({
+              ...prev,
+              users: prev.users.map((u) =>
+                u.email.trim().toLowerCase() === normalizedEmail ? synced : u
+              ),
+            }));
+          }
+        } catch (err) {
+          console.error('[INNOVARD DB] addTeamMember exception:', err);
+        }
+      })();
     }
   };
 
@@ -1029,6 +1170,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       ? 'admin'
       : updates.role ?? target.role;
     const nextTeamId = updates.teamId !== undefined ? updates.teamId : target.teamId;
+    const isChangingTeam = updates.teamId !== undefined;
 
     const merged: UserProfile = {
       ...target,
@@ -1040,6 +1182,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         ...(updates.connectedProfiles ?? {}),
         systemRole: enforcedRole,
         teamAssigned: Boolean(nextTeamId),
+        pendingJoinRequest: isChangingTeam
+          ? null
+          : target.connectedProfiles.pendingJoinRequest ?? null,
       },
     };
 

@@ -41,6 +41,21 @@ export default function TeamPage() {
     [users, currentTeam.id]
   );
 
+  const unassignedUsers = useMemo(
+    () => users.filter((u) => !u.teamId),
+    [users]
+  );
+
+  const otherUsersNotInTeam = useMemo(
+    () => (currentTeam.id ? users.filter((u) => u.teamId !== currentTeam.id) : []),
+    [users, currentTeam.id]
+  );
+
+  const teamById = useMemo(
+    () => new Map(teams.map((t) => [t.id, t])),
+    [teams]
+  );
+
   const myPendingRequest = currentUser?.connectedProfiles.pendingJoinRequest ?? null;
 
   // Edit Team Modal state (Admin)
@@ -266,6 +281,51 @@ export default function TeamPage() {
                     Từ chối
                   </button>
                 </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Admin Quick-Assign Panel for Unassigned Accounts */}
+      {isAdmin && Boolean(currentTeam.id) && unassignedUsers.length > 0 && (
+        <section className="rounded-2xl border border-indigo-200 bg-indigo-50/60 p-5 shadow-xs">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="text-sm font-bold text-indigo-950">
+                Tài khoản mới chưa có đội ({unassignedUsers.length}) — Thêm trực tiếp không cần chờ yêu cầu
+              </h2>
+              <p className="text-xs text-indigo-800">
+                Những tài khoản đã đăng nhập nhưng chưa thuộc đội nào. Bấm để xếp thẳng vào đội{' '}
+                <strong>{currentTeam.name}</strong> ngay lập tức.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-3 space-y-2.5">
+            {unassignedUsers.map((u) => (
+              <div
+                key={u.id}
+                className="flex flex-col justify-between gap-3 rounded-xl border border-indigo-200/80 bg-white p-3.5 sm:flex-row sm:items-center"
+              >
+                <div className="flex min-w-0 items-center gap-3">
+                  <UserAvatar src={u.avatarUrl} name={u.name} size="sm" />
+                  <div className="min-w-0">
+                    <p className="truncate text-xs font-bold text-slate-900">
+                      {u.name}
+                    </p>
+                    <p className="truncate text-[11px] text-slate-500">
+                      {u.email}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => updateUserByAdmin(u.id, { teamId: currentTeam.id })}
+                  className="shrink-0 rounded-xl bg-indigo-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs transition hover:bg-indigo-700"
+                >
+                  Thêm ngay vào {currentTeam.name}
+                </button>
               </div>
             ))}
           </div>
@@ -938,8 +998,14 @@ export default function TeamPage() {
 
       {/* Add Member Modal (Admin) */}
       {isAdmin && showAddMember && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs"
+          onClick={() => setShowAddMember(false)}
+        >
+          <div
+            className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold text-slate-900">
                 Thêm thành viên vào {currentTeam.name}
@@ -952,6 +1018,65 @@ export default function TeamPage() {
                 Đóng
               </button>
             </div>
+
+            {otherUsersNotInTeam.length > 0 && (
+              <div className="mt-4 rounded-2xl border border-indigo-200/80 bg-indigo-50/50 p-3.5">
+                <p className="text-xs font-bold text-indigo-950">
+                  Chọn nhanh tài khoản đã đăng nhập:
+                </p>
+                <div className="mt-2.5 max-h-48 space-y-2 overflow-y-auto pr-1">
+                  {otherUsersNotInTeam.map((u) => {
+                    const currentTeamLabel = u.teamId
+                      ? teamById.get(u.teamId)?.name ?? u.teamId
+                      : 'Chưa có đội';
+                    return (
+                      <div
+                        key={u.id}
+                        className="flex flex-col justify-between gap-2 rounded-xl border border-slate-200/80 bg-white p-2.5 sm:flex-row sm:items-center"
+                      >
+                        <div className="flex min-w-0 items-center gap-2.5">
+                          <UserAvatar src={u.avatarUrl} name={u.name} size="sm" />
+                          <div className="min-w-0">
+                            <p className="truncate text-xs font-bold text-slate-900">
+                              {u.name}
+                            </p>
+                            <p className="truncate text-[11px] text-slate-500">
+                              {u.email} · {currentTeamLabel}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setMemberName(u.name);
+                              setMemberEmail(u.email);
+                              setMemberTitle(u.title);
+                              setMemberRole(u.role);
+                              setMemberGithub(u.connectedProfiles.github);
+                              setMemberDiscord(u.connectedProfiles.discord);
+                            }}
+                            className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-100"
+                          >
+                            Điền form
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              updateUserByAdmin(u.id, { teamId: currentTeam.id });
+                              setShowAddMember(false);
+                            }}
+                            className="rounded-lg bg-indigo-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-indigo-700"
+                          >
+                            Thêm vào đội ngay
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             <form onSubmit={handleCreateMember} className="mt-4 space-y-3.5">
               <div className="grid gap-3 sm:grid-cols-2">
