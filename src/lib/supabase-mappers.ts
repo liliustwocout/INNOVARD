@@ -23,7 +23,11 @@ export const PRE_ASSIGNED_TEAM_ALPHA_EMAILS = [
 ];
 
 export const DEFAULT_SYSTEM_CONFIG: SystemConfig = {
+  standupStartTime: '06:00',
   standupDeadlineTime: '23:59',
+  standupStartDate: '',
+  standupEndDate: '',
+  standupDaysOfWeek: [1, 2, 3, 4, 5, 6, 0],
   standupDeadlineLabel: 'Hạn nộp Daily Standup hôm nay',
   allowLateStandup: true,
   allowBackdateStandup: true,
@@ -37,9 +41,30 @@ export const DEFAULT_SYSTEM_CONFIG: SystemConfig = {
 export function normalizeSystemConfig(
   raw?: Partial<SystemConfig> | null
 ): SystemConfig {
+  const startTimeValid =
+    typeof raw?.standupStartTime === 'string' &&
+    /^([01]\d|2[0-3]):[0-5]\d$/.test(raw.standupStartTime.trim());
   const timeValid =
     typeof raw?.standupDeadlineTime === 'string' &&
     /^([01]\d|2[0-3]):[0-5]\d$/.test(raw.standupDeadlineTime.trim());
+  const startDateValid =
+    typeof raw?.standupStartDate === 'string' &&
+    /^\d{4}-\d{2}-\d{2}$/.test(raw.standupStartDate.trim());
+  const endDateValid =
+    typeof raw?.standupEndDate === 'string' &&
+    /^\d{4}-\d{2}-\d{2}$/.test(raw.standupEndDate.trim());
+  const rawDays = Array.isArray(raw?.standupDaysOfWeek)
+    ? Array.from(
+        new Set(
+          raw.standupDaysOfWeek
+            .map((d) => Number(d))
+            .filter((d) => Number.isInteger(d) && d >= 0 && d <= 6)
+        )
+      )
+    : [];
+  const daysOfWeek =
+    rawDays.length > 0 ? rawDays : DEFAULT_SYSTEM_CONFIG.standupDaysOfWeek;
+
   const parsedMax = Number(raw?.maxTeamMembers);
   const maxMembers =
     Number.isFinite(parsedMax) && parsedMax >= 1
@@ -47,9 +72,15 @@ export function normalizeSystemConfig(
       : DEFAULT_SYSTEM_CONFIG.maxTeamMembers;
 
   return {
+    standupStartTime: startTimeValid
+      ? raw!.standupStartTime!.trim()
+      : DEFAULT_SYSTEM_CONFIG.standupStartTime,
     standupDeadlineTime: timeValid
       ? raw!.standupDeadlineTime!.trim()
       : DEFAULT_SYSTEM_CONFIG.standupDeadlineTime,
+    standupStartDate: startDateValid ? raw!.standupStartDate!.trim() : '',
+    standupEndDate: endDateValid ? raw!.standupEndDate!.trim() : '',
+    standupDaysOfWeek: daysOfWeek,
     standupDeadlineLabel:
       typeof raw?.standupDeadlineLabel === 'string' &&
       raw.standupDeadlineLabel.trim()

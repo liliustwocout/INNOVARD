@@ -4,7 +4,13 @@ import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useApp } from '@/context/AppContext';
 import { UserAvatar } from '@/components/ui/UserAvatar';
-import { formatVietnameseDate, getTodayISO } from '@/lib/date-utils';
+import {
+  addDaysISO,
+  formatVietnameseDate,
+  getTodayISO,
+  isStandupScheduledForDate,
+  STANDUP_WEEKDAY_OPTIONS,
+} from '@/lib/date-utils';
 import type { ReportLink, ReportLinkType } from '@/types/innovard';
 
 const LINK_TYPE_META: Record<
@@ -77,7 +83,13 @@ export function SubmissionsView() {
 
   // Quick Standup Config state (Admin)
   const [showQuickConfig, setShowQuickConfig] = useState(false);
+  const [draftStartTime, setDraftStartTime] = useState(systemConfig.standupStartTime);
   const [draftDeadlineTime, setDraftDeadlineTime] = useState(systemConfig.standupDeadlineTime);
+  const [draftStartDate, setDraftStartDate] = useState(systemConfig.standupStartDate);
+  const [draftEndDate, setDraftEndDate] = useState(systemConfig.standupEndDate);
+  const [draftDaysOfWeek, setDraftDaysOfWeek] = useState<number[]>(
+    systemConfig.standupDaysOfWeek
+  );
   const [draftAllowLate, setDraftAllowLate] = useState(systemConfig.allowLateStandup);
   const [draftAllowBackdate, setDraftAllowBackdate] = useState(systemConfig.allowBackdateStandup);
   const [quickConfigSaved, setQuickConfigSaved] = useState(false);
@@ -97,25 +109,43 @@ export function SubmissionsView() {
   }, []);
 
   useEffect(() => {
+    setDraftStartTime(systemConfig.standupStartTime);
     setDraftDeadlineTime(systemConfig.standupDeadlineTime);
+    setDraftStartDate(systemConfig.standupStartDate);
+    setDraftEndDate(systemConfig.standupEndDate);
+    setDraftDaysOfWeek(systemConfig.standupDaysOfWeek);
     setDraftAllowLate(systemConfig.allowLateStandup);
     setDraftAllowBackdate(systemConfig.allowBackdateStandup);
   }, [
+    systemConfig.standupStartTime,
     systemConfig.standupDeadlineTime,
+    systemConfig.standupStartDate,
+    systemConfig.standupEndDate,
+    systemConfig.standupDaysOfWeek,
     systemConfig.allowLateStandup,
     systemConfig.allowBackdateStandup,
   ]);
 
+  const effectiveStandupDate =
+    !isAdmin && !systemConfig.allowBackdateStandup ? todayISO : standupDate;
+  const isScheduledOnSelectedDate = isStandupScheduledForDate(
+    effectiveStandupDate,
+    systemConfig
+  );
+  const isFutureStandupDate = effectiveStandupDate > todayISO;
+  const isBeforeStartTimeToday = Boolean(
+    nowHHMM && nowHHMM < systemConfig.standupStartTime
+  );
   const isPastDeadlineToday = Boolean(
     nowHHMM && nowHHMM > systemConfig.standupDeadlineTime
   );
-  const effectiveStandupDate =
-    !isAdmin && !systemConfig.allowBackdateStandup ? todayISO : standupDate;
   const isStandupLockedForMember =
     !isAdmin &&
-    !systemConfig.allowLateStandup &&
-    effectiveStandupDate === todayISO &&
-    isPastDeadlineToday;
+    (!isScheduledOnSelectedDate ||
+      isFutureStandupDate ||
+      (effectiveStandupDate === todayISO &&
+        (isBeforeStartTimeToday ||
+          (!systemConfig.allowLateStandup && isPastDeadlineToday))));
 
   const isUnassignedMember = !isAdmin && !currentTeam.id;
   const hasSubmittedToday = useMemo(() => {
@@ -343,21 +373,38 @@ export function SubmissionsView() {
                 </p>
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   <span className="rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-0.5 text-[11px] font-semibold text-indigo-700">
-                    Hạn nộp mỗi ngày: {systemConfig.standupDeadlineTime}
+                    Khung giờ nộp: {systemConfig.standupStartTime} – {systemConfig.standupDeadlineTime}
                   </span>
-                  {nowHHMM && (
+                  {systemConfig.standupStartDate && (
+                    <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[11px] font-semibold text-slate-700">
+                      Lịch bắt đầu từ: {formatVietnameseDate(systemConfig.standupStartDate)}
+                    </span>
+                  )}
+                  {!isScheduledOnSelectedDate ? (
+                    <span className="rounded-full border border-slate-200 bg-slate-100 px-2.5 py-0.5 text-[11px] font-semibold text-slate-700">
+                      {effectiveStandupDate === todayISO
+                        ? 'Hôm nay chưa có lịch Standup'
+                        : 'Ngày này không có lịch Standup'}
+                    </span>
+                  ) : isFutureStandupDate ? (
+                    <span className="rounded-full border border-slate-200 bg-slate-100 px-2.5 py-0.5 text-[11px] font-semibold text-slate-700">
+                      Chưa tới ngày nộp
+                    </span>
+                  ) : nowHHMM ? (
                     <span
                       className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${
-                        isPastDeadlineToday
+                        isBeforeStartTimeToday || isPastDeadlineToday
                           ? 'border-amber-200 bg-amber-50 text-amber-800'
                           : 'border-emerald-200 bg-emerald-50 text-emerald-700'
                       }`}
                     >
-                      {isPastDeadlineToday
+                      {isBeforeStartTimeToday
+                        ? `Chưa tới giờ mở nộp (${systemConfig.standupStartTime})`
+                        : isPastDeadlineToday
                         ? 'Đã quá giờ hạn hôm nay'
-                        : 'Đang trong hạn'}
+                        : 'Đang trong khung giờ nộp'}
                     </span>
-                  )}
+                  ) : null}
                   {isAdmin && (
                     <button
                       type="button"
@@ -369,7 +416,7 @@ export function SubmissionsView() {
                     >
                       {showQuickConfig
                         ? 'Đóng cấu hình nhanh'
-                        : 'Chỉnh nhanh hạn nộp Standup'}
+                        : 'Chỉnh lịch & giờ Standup'}
                     </button>
                   )}
                 </div>
@@ -395,29 +442,137 @@ export function SubmissionsView() {
                 onSubmit={(e) => {
                   e.preventDefault();
                   updateSystemConfig({
+                    standupStartTime: draftStartTime,
                     standupDeadlineTime: draftDeadlineTime,
+                    standupStartDate: draftStartDate,
+                    standupEndDate: draftEndDate,
+                    standupDaysOfWeek: draftDaysOfWeek,
                     allowLateStandup: draftAllowLate,
                     allowBackdateStandup: draftAllowBackdate,
                   });
                   setQuickConfigSaved(true);
                   setTimeout(() => setQuickConfigSaved(false), 3000);
                 }}
-                className="mt-4 rounded-2xl border border-indigo-200 bg-indigo-50/40 p-4"
+                className="mt-4 space-y-4 rounded-2xl border border-indigo-200 bg-indigo-50/40 p-4"
               >
-                <div className="flex flex-wrap items-end justify-between gap-4">
-                  <div className="flex flex-wrap items-center gap-4">
-                    <div>
-                      <label className="mb-1 block text-xs font-semibold text-slate-700">
-                        Giờ hết hạn Standup
-                      </label>
-                      <input
-                        type="time"
-                        required
-                        value={draftDeadlineTime}
-                        onChange={(e) => setDraftDeadlineTime(e.target.value)}
-                        className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-800 outline-none focus:border-indigo-500"
-                      />
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-700">
+                      Nộp từ giờ
+                    </label>
+                    <input
+                      type="time"
+                      required
+                      value={draftStartTime}
+                      onChange={(e) => setDraftStartTime(e.target.value)}
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-800 outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-700">
+                      Đến giờ (Hạn chót)
+                    </label>
+                    <input
+                      type="time"
+                      required
+                      value={draftDeadlineTime}
+                      onChange={(e) => setDraftDeadlineTime(e.target.value)}
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-800 outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-700">
+                      Bắt đầu từ ngày
+                    </label>
+                    <input
+                      type="date"
+                      value={draftStartDate}
+                      onChange={(e) => setDraftStartDate(e.target.value)}
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-800 outline-none focus:border-indigo-500"
+                    />
+                    <div className="mt-1.5 flex flex-wrap gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setDraftStartDate(todayISO)}
+                        className="rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-600 hover:bg-slate-100"
+                      >
+                        Hôm nay
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDraftStartDate(addDaysISO(todayISO, 1))}
+                        className="rounded-md border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold text-indigo-700 hover:bg-indigo-100"
+                      >
+                        Ngày mai
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDraftStartDate('')}
+                        className="rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-500 hover:bg-slate-100"
+                      >
+                        Bỏ giới hạn
+                      </button>
                     </div>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-slate-700">
+                      Kết thúc ngày (tùy chọn)
+                    </label>
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="date"
+                        value={draftEndDate}
+                        onChange={(e) => setDraftEndDate(e.target.value)}
+                        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-800 outline-none focus:border-indigo-500"
+                      />
+                      {draftEndDate && (
+                        <button
+                          type="button"
+                          onClick={() => setDraftEndDate('')}
+                          className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[11px] font-semibold text-slate-500 hover:bg-slate-100"
+                        >
+                          Xóa
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="mb-1.5 block text-xs font-semibold text-slate-700">
+                    Các ngày trong tuần có Standup
+                  </label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {STANDUP_WEEKDAY_OPTIONS.map((opt) => {
+                      const active = draftDaysOfWeek.includes(opt.day);
+                      return (
+                        <button
+                          key={opt.day}
+                          type="button"
+                          onClick={() =>
+                            setDraftDaysOfWeek((prev) =>
+                              prev.includes(opt.day)
+                                ? prev.length > 1
+                                  ? prev.filter((d) => d !== opt.day)
+                                  : prev
+                                : [...prev, opt.day]
+                            )
+                          }
+                          className={`rounded-lg border px-2.5 py-1 text-[11px] font-bold transition ${
+                            active
+                              ? 'border-indigo-600 bg-indigo-600 text-white'
+                              : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-100'
+                          }`}
+                        >
+                          {opt.short}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-4 border-t border-indigo-200/70 pt-3">
+                  <div className="flex flex-wrap items-center gap-4">
                     <label className="flex items-center gap-2 text-xs font-medium text-slate-700">
                       <input
                         type="checkbox"
@@ -456,7 +611,16 @@ export function SubmissionsView() {
 
             {isStandupLockedForMember && (
               <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-800">
-                Đã quá thời hạn nộp Daily Standup hôm nay ({systemConfig.standupDeadlineTime}). Hệ thống hiện đang khóa nộp trễ hạn.
+                {!isScheduledOnSelectedDate
+                  ? systemConfig.standupStartDate &&
+                    effectiveStandupDate < systemConfig.standupStartDate
+                    ? `Lịch Daily Standup chỉ bắt đầu áp dụng từ ngày ${formatVietnameseDate(systemConfig.standupStartDate)}.`
+                    : `Ngày ${formatVietnameseDate(effectiveStandupDate)} hiện không nằm trong lịch nộp Daily Standup.`
+                  : isFutureStandupDate
+                  ? `Chưa tới ngày nộp Daily Standup (${formatVietnameseDate(effectiveStandupDate)}).`
+                  : isBeforeStartTimeToday
+                  ? `Chưa tới giờ mở nộp Daily Standup hôm nay. Khung giờ cho phép: ${systemConfig.standupStartTime} – ${systemConfig.standupDeadlineTime}.`
+                  : `Đã quá khung giờ nộp Daily Standup hôm nay (${systemConfig.standupStartTime} – ${systemConfig.standupDeadlineTime}). Hệ thống hiện đang khóa nộp trễ hạn.`}
               </div>
             )}
 

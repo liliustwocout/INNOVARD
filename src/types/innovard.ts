@@ -39,7 +39,11 @@ export interface ActivityLogItem {
 }
 
 export interface SystemConfig {
+  standupStartTime: string;
   standupDeadlineTime: string;
+  standupStartDate: string;
+  standupEndDate: string;
+  standupDaysOfWeek: number[];
   standupDeadlineLabel: string;
   allowLateStandup: boolean;
   allowBackdateStandup: boolean;

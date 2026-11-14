@@ -5,7 +5,12 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useApp } from '@/context/AppContext';
 import { UserAvatar } from '@/components/ui/UserAvatar';
-import { formatVietnameseDate } from '@/lib/date-utils';
+import {
+  addDaysISO,
+  formatVietnameseDate,
+  getTodayISO,
+  STANDUP_WEEKDAY_OPTIONS,
+} from '@/lib/date-utils';
 import { DEFAULT_SYSTEM_CONFIG, isAdminEmail } from '@/lib/supabase-mappers';
 import type { ActivityLogType, Team, TeamRole } from '@/types/innovard';
 
@@ -79,7 +84,19 @@ export default function AdminPage() {
   const [logSearch, setLogSearch] = useState('');
 
   // System Config form state
+  const [cfgStandupStartTime, setCfgStandupStartTime] = useState(
+    systemConfig.standupStartTime
+  );
   const [cfgStandupTime, setCfgStandupTime] = useState(systemConfig.standupDeadlineTime);
+  const [cfgStandupStartDate, setCfgStandupStartDate] = useState(
+    systemConfig.standupStartDate
+  );
+  const [cfgStandupEndDate, setCfgStandupEndDate] = useState(
+    systemConfig.standupEndDate
+  );
+  const [cfgStandupDaysOfWeek, setCfgStandupDaysOfWeek] = useState<number[]>(
+    systemConfig.standupDaysOfWeek
+  );
   const [cfgStandupLabel, setCfgStandupLabel] = useState(systemConfig.standupDeadlineLabel);
   const [cfgAllowLate, setCfgAllowLate] = useState(systemConfig.allowLateStandup);
   const [cfgAllowBackdate, setCfgAllowBackdate] = useState(systemConfig.allowBackdateStandup);
@@ -93,7 +110,11 @@ export default function AdminPage() {
   const [cfgSavedNotice, setCfgSavedNotice] = useState<string | null>(null);
 
   useEffect(() => {
+    setCfgStandupStartTime(systemConfig.standupStartTime);
     setCfgStandupTime(systemConfig.standupDeadlineTime);
+    setCfgStandupStartDate(systemConfig.standupStartDate);
+    setCfgStandupEndDate(systemConfig.standupEndDate);
+    setCfgStandupDaysOfWeek(systemConfig.standupDaysOfWeek);
     setCfgStandupLabel(systemConfig.standupDeadlineLabel);
     setCfgAllowLate(systemConfig.allowLateStandup);
     setCfgAllowBackdate(systemConfig.allowBackdateStandup);
@@ -788,7 +809,11 @@ export default function AdminPage() {
             onSubmit={(e) => {
               e.preventDefault();
               updateSystemConfig({
+                standupStartTime: cfgStandupStartTime,
                 standupDeadlineTime: cfgStandupTime,
+                standupStartDate: cfgStandupStartDate,
+                standupEndDate: cfgStandupEndDate,
+                standupDaysOfWeek: cfgStandupDaysOfWeek,
                 standupDeadlineLabel: cfgStandupLabel,
                 allowLateStandup: cfgAllowLate,
                 allowBackdateStandup: cfgAllowBackdate,
@@ -809,17 +834,46 @@ export default function AdminPage() {
             <div className="rounded-2xl border border-slate-200/80 bg-slate-50/50 p-5 space-y-4">
               <div>
                 <h3 className="text-sm font-bold text-slate-900">
-                  1. Thông số Daily Standup &amp; Báo cáo nhóm
+                  1. Lịch &amp; Khung giờ Daily Standup / Báo cáo nhóm
                 </h3>
                 <p className="text-xs text-slate-500">
-                  Áp dụng đồng thời trên bộ đếm ngược Trang tổng quan và biểu mẫu Bài nộp của tôi.
+                  Chọn ngày bắt đầu áp dụng, các ngày trong tuần có Standup và khung giờ được phép nộp (hiển thị trên Lịch sự kiện, Trang tổng quan &amp; Bài nộp của tôi).
                 </p>
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
                   <label className="mb-1 block text-xs font-semibold text-slate-700">
-                    Thời hạn nộp Daily Standup mỗi ngày (HH:mm)
+                    Được phép nộp từ giờ (HH:mm)
+                  </label>
+                  <input
+                    type="time"
+                    required
+                    value={cfgStandupStartTime}
+                    onChange={(e) => setCfgStandupStartTime(e.target.value)}
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-900 outline-none focus:border-indigo-500"
+                  />
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {['00:00', '06:00', '07:00', '08:00', '09:00'].map((preset) => (
+                      <button
+                        key={preset}
+                        type="button"
+                        onClick={() => setCfgStandupStartTime(preset)}
+                        className={`rounded-lg border px-2.5 py-1 text-[11px] font-semibold transition ${
+                          cfgStandupStartTime === preset
+                            ? 'border-indigo-600 bg-indigo-600 text-white'
+                            : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-100'
+                        }`}
+                      >
+                        {preset}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-slate-700">
+                    Đến giờ / Hạn chót mỗi ngày (HH:mm)
                   </label>
                   <input
                     type="time"
@@ -829,7 +883,7 @@ export default function AdminPage() {
                     className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-900 outline-none focus:border-indigo-500"
                   />
                   <div className="mt-2 flex flex-wrap gap-1.5">
-                    {['09:00', '10:00', '18:00', '21:00', '22:00', '23:59'].map(
+                    {['09:00', '10:00', '12:00', '18:00', '21:00', '23:59'].map(
                       (preset) => (
                         <button
                           key={preset}
@@ -847,20 +901,129 @@ export default function AdminPage() {
                     )}
                   </div>
                 </div>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-slate-700">
+                    Bắt đầu áp dụng lịch từ ngày (để trống = không giới hạn)
+                  </label>
+                  <input
+                    type="date"
+                    value={cfgStandupStartDate}
+                    onChange={(e) => setCfgStandupStartDate(e.target.value)}
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-900 outline-none focus:border-indigo-500"
+                  />
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setCfgStandupStartDate(getTodayISO())}
+                      className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-100"
+                    >
+                      Từ hôm nay
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCfgStandupStartDate(addDaysISO(getTodayISO(), 1))}
+                      className="rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-[11px] font-semibold text-indigo-700 hover:bg-indigo-100"
+                    >
+                      Từ ngày mai
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCfgStandupStartDate('')}
+                      className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-500 hover:bg-slate-100"
+                    >
+                      Không giới hạn
+                    </button>
+                  </div>
+                </div>
 
                 <div>
                   <label className="mb-1 block text-xs font-semibold text-slate-700">
-                    Tiêu đề hạn nộp hiển thị trên Trang tổng quan
+                    Kết thúc lịch vào ngày (tùy chọn)
                   </label>
                   <input
-                    type="text"
-                    required
-                    value={cfgStandupLabel}
-                    onChange={(e) => setCfgStandupLabel(e.target.value)}
-                    placeholder="Hạn nộp Daily Standup hôm nay"
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none focus:border-indigo-500"
+                    type="date"
+                    value={cfgStandupEndDate}
+                    onChange={(e) => setCfgStandupEndDate(e.target.value)}
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-900 outline-none focus:border-indigo-500"
                   />
+                  {cfgStandupEndDate && (
+                    <button
+                      type="button"
+                      onClick={() => setCfgStandupEndDate('')}
+                      className="mt-2 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-500 hover:bg-slate-100"
+                    >
+                      Xóa ngày kết thúc
+                    </button>
+                  )}
                 </div>
+              </div>
+
+              <div>
+                <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+                  <label className="text-xs font-semibold text-slate-700">
+                    Các ngày trong tuần có lịch Daily Standup
+                  </label>
+                  <div className="flex gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setCfgStandupDaysOfWeek([1, 2, 3, 4, 5, 6, 0])}
+                      className="rounded-lg border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-600 hover:bg-slate-100"
+                    >
+                      Cả tuần
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCfgStandupDaysOfWeek([1, 2, 3, 4, 5])}
+                      className="rounded-lg border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-600 hover:bg-slate-100"
+                    >
+                      T2–T6
+                    </button>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {STANDUP_WEEKDAY_OPTIONS.map((opt) => {
+                    const active = cfgStandupDaysOfWeek.includes(opt.day);
+                    return (
+                      <button
+                        key={opt.day}
+                        type="button"
+                        onClick={() =>
+                          setCfgStandupDaysOfWeek((prev) =>
+                            prev.includes(opt.day)
+                              ? prev.length > 1
+                                ? prev.filter((d) => d !== opt.day)
+                                : prev
+                              : [...prev, opt.day]
+                          )
+                        }
+                        className={`rounded-xl border px-3 py-1.5 text-xs font-bold transition ${
+                          active
+                            ? 'border-indigo-600 bg-indigo-600 text-white shadow-2xs'
+                            : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-100'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-700">
+                  Tiêu đề hạn nộp hiển thị trên Trang tổng quan
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={cfgStandupLabel}
+                  onChange={(e) => setCfgStandupLabel(e.target.value)}
+                  placeholder="Hạn nộp Daily Standup hôm nay"
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none focus:border-indigo-500"
+                />
               </div>
 
               <div>

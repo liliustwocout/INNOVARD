@@ -1,9 +1,63 @@
+import type { SystemConfig } from '@/types/innovard';
+
 export function getTodayISO(): string {
   const now = new Date();
   const year = now.getFullYear();
   const month = String(now.getMonth() + 1).padStart(2, '0');
   const day = String(now.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+export function addDaysISO(dateStr: string, offsetDays: number): string {
+  const base = dateStr ? new Date(`${dateStr}T00:00:00`) : new Date();
+  if (Number.isNaN(base.getTime())) return getTodayISO();
+  base.setDate(base.getDate() + offsetDays);
+  const year = base.getFullYear();
+  const month = String(base.getMonth() + 1).padStart(2, '0');
+  const day = String(base.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+export const STANDUP_WEEKDAY_OPTIONS: Array<{
+  day: number;
+  short: string;
+  label: string;
+}> = [
+  { day: 1, short: 'T2', label: 'Thứ 2' },
+  { day: 2, short: 'T3', label: 'Thứ 3' },
+  { day: 3, short: 'T4', label: 'Thứ 4' },
+  { day: 4, short: 'T5', label: 'Thứ 5' },
+  { day: 5, short: 'T6', label: 'Thứ 6' },
+  { day: 6, short: 'T7', label: 'Thứ 7' },
+  { day: 0, short: 'CN', label: 'Chủ nhật' },
+];
+
+export function isStandupScheduledForDate(
+  dateStr: string,
+  config: Pick<SystemConfig, 'standupStartDate' | 'standupEndDate' | 'standupDaysOfWeek'>
+): boolean {
+  if (!dateStr) return false;
+  if (config.standupStartDate && dateStr < config.standupStartDate) return false;
+  if (config.standupEndDate && dateStr > config.standupEndDate) return false;
+  const d = new Date(`${dateStr}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return false;
+  const days =
+    Array.isArray(config.standupDaysOfWeek) && config.standupDaysOfWeek.length > 0
+      ? config.standupDaysOfWeek
+      : [1, 2, 3, 4, 5, 6, 0];
+  return days.includes(d.getDay());
+}
+
+export function findNextStandupDateISO(
+  fromDateISO: string,
+  config: Pick<SystemConfig, 'standupStartDate' | 'standupEndDate' | 'standupDaysOfWeek'>,
+  maxLookaheadDays = 30
+): string | null {
+  for (let i = 0; i <= maxLookaheadDays; i += 1) {
+    const candidate = addDaysISO(fromDateISO, i);
+    if (isStandupScheduledForDate(candidate, config)) return candidate;
+  }
+  return null;
 }
 
 export function formatVietnameseDate(dateStr: string): string {

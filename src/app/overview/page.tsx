@@ -6,9 +6,12 @@ import { useApp } from '@/context/AppContext';
 import { UserAvatar } from '@/components/ui/UserAvatar';
 import { triggerOnboardingTour } from '@/components/onboarding/OnboardingTour';
 import {
+  findNextStandupDateISO,
   formatLiveCountdown,
+  formatVietnameseDate,
   formatVietnameseWeekdayDayMonth,
   getTodayISO,
+  isStandupScheduledForDate,
 } from '@/lib/date-utils';
 
 const ROLE_LABELS: Record<string, string> = {
@@ -99,16 +102,26 @@ export default function OverviewPage() {
       )
       .sort((a, b) => a.date.localeCompare(b.date));
 
-    const standupRow = {
-      id: 'daily-standup-today',
-      title: systemConfig.standupDeadlineLabel,
-      subtitle: `Hạn daily standup · ${systemConfig.standupDeadlineTime} ${formatVietnameseWeekdayDayMonth(todayISO)}`,
-      date: todayISO,
-      time: systemConfig.standupDeadlineTime,
-      completed: hasSubmittedStandupToday,
-      completedText: 'Đã nộp',
-      href: '/project/submissions',
-    };
+    const scheduledToday = isStandupScheduledForDate(todayISO, systemConfig);
+    const nextStandupDate = scheduledToday
+      ? todayISO
+      : findNextStandupDateISO(todayISO, systemConfig);
+
+    const standupRow = nextStandupDate
+      ? {
+          id: 'daily-standup-next',
+          title:
+            nextStandupDate > todayISO
+              ? `${systemConfig.standupDeadlineLabel} (Bắt đầu ${formatVietnameseDate(nextStandupDate)})`
+              : systemConfig.standupDeadlineLabel,
+          subtitle: `Khung giờ ${systemConfig.standupStartTime} – ${systemConfig.standupDeadlineTime} · ${formatVietnameseWeekdayDayMonth(nextStandupDate)}`,
+          date: nextStandupDate,
+          time: systemConfig.standupDeadlineTime,
+          completed: nextStandupDate === todayISO ? hasSubmittedStandupToday : false,
+          completedText: 'Đã nộp',
+          href: '/project/submissions',
+        }
+      : null;
 
     const eventRows = calendarDeadlines.map((ev) => ({
       id: ev.id,
@@ -121,15 +134,14 @@ export default function OverviewPage() {
       href: '/calendar',
     }));
 
-    return currentTeam.id ? [standupRow, ...eventRows] : eventRows;
+    return currentTeam.id && standupRow ? [standupRow, ...eventRows] : eventRows;
   }, [
     events,
     currentTeam.id,
     currentTeam.name,
     todayISO,
     hasSubmittedStandupToday,
-    systemConfig.standupDeadlineLabel,
-    systemConfig.standupDeadlineTime,
+    systemConfig,
   ]);
 
   const teamCodeBadge = useMemo(() => {

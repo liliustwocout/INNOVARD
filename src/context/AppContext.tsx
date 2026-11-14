@@ -16,7 +16,7 @@ import type {
   TeamRole,
   UserProfile,
 } from '@/types/innovard';
-import { getTodayISO } from '@/lib/date-utils';
+import { getTodayISO, isStandupScheduledForDate } from '@/lib/date-utils';
 import { getSupabaseClient, isSupabaseConfigured } from '@/lib/supabase';
 import {
   DEFAULT_SYSTEM_CONFIG,
@@ -1410,13 +1410,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const nowHHMM = `${String(now.getHours()).padStart(2, '0')}:${String(
       now.getMinutes()
     ).padStart(2, '0')}`;
-    if (
-      !isAdmin &&
-      !state.systemConfig.allowLateStandup &&
-      resolvedDate === todayISO &&
-      nowHHMM > state.systemConfig.standupDeadlineTime
-    ) {
-      return;
+    if (!isAdmin) {
+      if (!isStandupScheduledForDate(resolvedDate, state.systemConfig)) {
+        return;
+      }
+      if (resolvedDate > todayISO) {
+        return;
+      }
+      if (resolvedDate === todayISO) {
+        if (nowHHMM < state.systemConfig.standupStartTime) {
+          return;
+        }
+        if (
+          !state.systemConfig.allowLateStandup &&
+          nowHHMM > state.systemConfig.standupDeadlineTime
+        ) {
+          return;
+        }
+      }
     }
 
     const newStandup: DailyStandup = {
