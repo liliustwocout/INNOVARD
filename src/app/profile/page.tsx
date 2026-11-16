@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useApp } from '@/context/AppContext';
 import { UserAvatar } from '@/components/ui/UserAvatar';
+import { Toast } from '@/components/ui/Toast';
 
 const ROLE_LABELS: Record<string, string> = {
   admin: 'Quản trị viên (Admin)',
@@ -106,9 +107,7 @@ export default function ProfilePage() {
       </div>
 
       {savedNotice && (
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
-          {savedNotice}
-        </div>
+        <Toast message={savedNotice} />
       )}
 
       <form onSubmit={handleSaveAll} className="grid gap-6 lg:grid-cols-12">

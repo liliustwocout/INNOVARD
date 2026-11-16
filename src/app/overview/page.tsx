@@ -14,6 +14,7 @@ import {
   isStandupScheduledForDate,
 } from '@/lib/date-utils';
 import type { CalendarEvent } from '@/types/innovard';
+import { ProgressBar } from '@/components/ui/ProgressBar';
 
 const ROLE_LABELS: Record<string, string> = {
   admin: 'Admin',
@@ -341,7 +342,7 @@ export default function OverviewPage() {
         <div>
           <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl">
             Chào{' '}
-            <span className="italic uppercase text-indigo-600">
+            <span className="text-indigo-600">
               {currentUser?.name ?? 'Thành viên'}
             </span>
           </h1>
@@ -365,7 +366,7 @@ export default function OverviewPage() {
         <Link
           href="/profile"
           data-tour="kpi-profile"
-          className="group rounded-2xl border border-slate-200/90 bg-white p-5 shadow-xs transition hover:border-indigo-300"
+          className="group ui-lift rounded-2xl border border-slate-200/90 bg-white p-5 shadow-xs hover:border-indigo-300"
         >
           <div className="flex items-center justify-between text-xs font-medium text-slate-500">
             <span>Hồ sơ đã hoàn thiện</span>
@@ -381,7 +382,7 @@ export default function OverviewPage() {
         <Link
           href="/team"
           data-tour="kpi-team"
-          className="group rounded-2xl border border-slate-200/90 bg-white p-5 shadow-xs transition hover:border-indigo-300"
+          className="group ui-lift rounded-2xl border border-slate-200/90 bg-white p-5 shadow-xs hover:border-indigo-300"
         >
           <div className="flex items-center justify-between text-xs font-medium text-slate-500">
             <span>Thành viên đội</span>
@@ -397,7 +398,7 @@ export default function OverviewPage() {
         <Link
           href="/project/progress"
           data-tour="kpi-progress"
-          className="group rounded-2xl border border-slate-200/90 bg-white p-5 shadow-xs transition hover:border-indigo-300"
+          className="group ui-lift rounded-2xl border border-slate-200/90 bg-white p-5 shadow-xs hover:border-indigo-300"
         >
           <div className="flex items-center justify-between text-xs font-medium text-slate-500">
             <span>Tiến độ của tôi</span>
@@ -575,11 +576,11 @@ export default function OverviewPage() {
             target="_blank"
             rel="noreferrer"
             data-tour="overview-github"
-            className="group flex items-center justify-between gap-4 rounded-2xl border border-slate-200/90 bg-white p-5 shadow-xs transition hover:border-indigo-300"
+            className="group ui-lift flex items-center justify-between gap-4 rounded-2xl border border-slate-200/90 bg-white p-5 shadow-xs hover:border-indigo-300"
           >
             <div className="min-w-0">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                GITHUB REPO
+              <p className="text-[11px] font-semibold text-slate-400">
+                GitHub repo
               </p>
               <p className="mt-1 truncate text-base font-bold text-slate-900 group-hover:text-indigo-700">
                 {repoShortName}
@@ -598,11 +599,11 @@ export default function OverviewPage() {
             target="_blank"
             rel="noreferrer"
             data-tour="overview-discord"
-            className="group flex items-center justify-between gap-4 rounded-2xl border border-slate-200/90 bg-white p-5 shadow-xs transition hover:border-indigo-300"
+            className="group ui-lift flex items-center justify-between gap-4 rounded-2xl border border-slate-200/90 bg-white p-5 shadow-xs hover:border-indigo-300"
           >
             <div className="min-w-0">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                DISCORD
+              <p className="text-[11px] font-semibold text-slate-400">
+                Discord
               </p>
               <p className="mt-1 truncate text-base font-bold text-slate-900 group-hover:text-indigo-700">
                 Tham gia server
@@ -621,11 +622,11 @@ export default function OverviewPage() {
           <Link
             href="/team"
             data-tour="overview-github"
-            className="group flex items-center justify-between gap-4 rounded-2xl border border-amber-200 bg-amber-50/70 p-5 shadow-xs transition hover:border-amber-300"
+            className="group ui-lift flex items-center justify-between gap-4 rounded-2xl border border-amber-200 bg-amber-50/70 p-5 shadow-xs hover:border-amber-300"
           >
             <div className="min-w-0">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-amber-700">
-                CHƯA CÓ ĐỘI
+              <p className="text-[11px] font-semibold text-amber-700">
+                Chưa có đội
               </p>
               <p className="mt-1 truncate text-base font-bold text-slate-900 group-hover:text-indigo-700">
                 Chọn đội để xin gia nhập
@@ -642,11 +643,11 @@ export default function OverviewPage() {
           <Link
             href="/calendar"
             data-tour="overview-discord"
-            className="group flex items-center justify-between gap-4 rounded-2xl border border-slate-200/90 bg-white p-5 shadow-xs transition hover:border-indigo-300"
+            className="group ui-lift flex items-center justify-between gap-4 rounded-2xl border border-slate-200/90 bg-white p-5 shadow-xs hover:border-indigo-300"
           >
             <div className="min-w-0">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                LỊCH CHƯƠNG TRÌNH
+              <p className="text-[11px] font-semibold text-slate-400">
+                Lịch chương trình
               </p>
               <p className="mt-1 truncate text-base font-bold text-slate-900 group-hover:text-indigo-700">
                 Xem lịch sự kiện chung
@@ -664,8 +665,8 @@ export default function OverviewPage() {
 
       {/* Tầng 5: Khối ĐỘI CỦA TÔI (2 cột trong 1 khung lớn) */}
       <section data-tour="overview-my-team" className="relative pt-3">
-        <span className="absolute top-0 left-5 z-10 rounded-full bg-indigo-600 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-white shadow-xs">
-          ĐỘI CỦA TÔI
+        <span className="absolute top-0 left-5 z-10 rounded-full bg-indigo-600 px-3 py-1 text-[10px] font-semibold text-white shadow-xs">
+          Đội của tôi
         </span>
 
         {!currentTeam.id ? (
@@ -697,7 +698,7 @@ export default function OverviewPage() {
 
             <div className="space-y-3 lg:col-span-7">
               <div className="flex items-center justify-between">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                <h3 className="text-xs font-semibold text-slate-400">
                   Thành viên trong nhóm (0)
                 </h3>
                 <Link
@@ -742,19 +743,14 @@ export default function OverviewPage() {
                   {currentTeam.progress}% tiến độ
                 </span>
               </div>
-              <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
-                <div
-                  className="h-full rounded-full bg-indigo-600"
-                  style={{ width: `${currentTeam.progress}%` }}
-                />
-              </div>
+              <ProgressBar value={currentTeam.progress} />
             </div>
           </div>
 
           {/* Cột phải: Danh sách thành viên */}
           <div className="space-y-3 lg:col-span-7">
             <div className="flex items-center justify-between">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+              <h3 className="text-xs font-semibold text-slate-400">
                 Thành viên trong nhóm ({teamMembers.length})
               </h3>
               <Link
@@ -787,7 +783,7 @@ export default function OverviewPage() {
                       />
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                          <p className="truncate text-sm font-bold uppercase text-slate-900">
+                          <p className="truncate text-sm font-bold text-slate-900">
                             {member.name}
                           </p>
                           <span

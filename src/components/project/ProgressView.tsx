@@ -6,6 +6,7 @@ import { useApp } from '@/context/AppContext';
 import { UserAvatar } from '@/components/ui/UserAvatar';
 import { formatCountdownLabel, formatVietnameseDate, getTodayISO } from '@/lib/date-utils';
 import type { MemberTask } from '@/types/innovard';
+import { ProgressBar } from '@/components/ui/ProgressBar';
 
 const STATUS_META: Record<
   MemberTask['status'],
@@ -188,7 +189,7 @@ export function ProgressView() {
       {isUnassignedMember && (
         <section className="flex flex-col justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50/70 p-4 sm:flex-row sm:items-center">
           <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-amber-800">
+            <p className="text-xs font-semibold text-amber-800">
               Bạn chưa tham gia đội nào
             </p>
             <p className="mt-0.5 text-xs text-slate-700">
@@ -212,12 +213,7 @@ export function ProgressView() {
           <p className="mt-2 text-2xl font-extrabold text-slate-900">
             {avgCompletion}%
           </p>
-          <div className="mt-2.5 h-2 w-full overflow-hidden rounded-full bg-slate-100">
-            <div
-              className="h-full rounded-full bg-indigo-600"
-              style={{ width: `${avgCompletion}%` }}
-            />
-          </div>
+          <ProgressBar value={avgCompletion} className="mt-2.5" />
         </div>
 
         <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs">
@@ -496,7 +492,7 @@ export function ProgressView() {
 
       {/* Modal Add Task */}
       {showNewTask && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs">
+        <div className="ui-overlay fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs">
           <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold text-slate-900">

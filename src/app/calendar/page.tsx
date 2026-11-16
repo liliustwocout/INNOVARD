@@ -633,12 +633,12 @@ export default function CalendarPage() {
       {/* Header matching reference hierarchy in clean INNOVARD Light Theme */}
       <header className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400">
-            CHƯƠNG TRÌNH · {systemConfig.programName}
-          </p>
-          <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl">
-            Lịch <span className="italic text-indigo-600">sự kiện</span>
+          <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl">
+            Lịch sự kiện
           </h1>
+          <p className="mt-1 text-sm font-medium text-slate-500">
+            Chương trình {systemConfig.programName}
+          </p>
           <p className="mt-1.5 max-w-3xl text-xs leading-relaxed text-slate-500 sm:text-sm">
             {currentTeam.id
               ? `Mọi thứ của đội ${currentTeam.name} và chương trình nằm chung một chỗ: buổi coaching, mentoring 1-1, hạn nộp Daily Standup (${systemConfig.standupDeadlineTime}), báo cáo tuần và các sự kiện khác. Bấm vào nhãn bên dưới để ẩn bớt loại bạn không cần xem. Giờ trên lịch là giờ Việt Nam.`
@@ -802,7 +802,7 @@ export default function CalendarPage() {
             <div className="min-w-[960px]">
               {/* Day Column Headers */}
               <div className="grid grid-cols-[72px_repeat(7,minmax(0,1fr))] border-b border-slate-200 bg-slate-50/70">
-                <div className="flex items-end justify-center border-r border-slate-200/80 pb-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                <div className="flex items-end justify-center border-r border-slate-200/80 pb-2 text-[10px] font-semibold text-slate-400">
                   GMT+7
                 </div>
                 {weekDays.map((col) => {
@@ -815,7 +815,7 @@ export default function CalendarPage() {
                       }`}
                     >
                       <p
-                        className={`text-[11px] font-bold uppercase tracking-wider ${
+                        className={`text-[11px] font-semibold ${
                           col.isToday ? 'text-indigo-600' : 'text-slate-400'
                         }`}
                       >
@@ -1117,7 +1117,7 @@ export default function CalendarPage() {
       {/* MODAL: Daily Standup Status for Selected Day */}
       {selectedStandupDate && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs"
+          className="ui-overlay fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs"
           onClick={() => setSelectedStandupDate(null)}
         >
           <div
@@ -1166,7 +1166,7 @@ export default function CalendarPage() {
                           size="sm"
                         />
                         <div className="min-w-0">
-                          <p className="truncate text-xs font-bold uppercase text-slate-900">
+                          <p className="truncate text-xs font-bold text-slate-900">
                             {member.name}
                           </p>
                           <p className="truncate text-[11px] text-slate-500">
@@ -1241,7 +1241,7 @@ export default function CalendarPage() {
       {/* MODAL: Single Event Detail */}
       {selectedEvent && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs"
+          className="ui-overlay fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs"
           onClick={() => setSelectedEvent(null)}
         >
           <div
@@ -1328,7 +1328,7 @@ export default function CalendarPage() {
       {/* MODAL: Month View Selected Day Popup */}
       {selectedMonthDay && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs"
+          className="ui-overlay fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs"
           onClick={() => setSelectedMonthDay(null)}
         >
           <div
@@ -1426,7 +1426,7 @@ export default function CalendarPage() {
 
       {/* MODAL: Add Calendar Event */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs">
+        <div className="ui-overlay fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs">
           <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold text-slate-900">
@@ -1640,7 +1640,7 @@ export default function CalendarPage() {
       {/* MODAL: Admin Configure Daily Standup Schedule & Window */}
       {isAdmin && showStandupConfigModal && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs"
+          className="ui-overlay fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs"
           onClick={() => setShowStandupConfigModal(false)}
         >
           <div

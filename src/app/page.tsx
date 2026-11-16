@@ -223,7 +223,7 @@ export default function HomePage() {
       {!isAdmin && !currentTeam.id && (
         <section className="flex flex-col justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50/70 p-4 sm:flex-row sm:items-center">
           <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-amber-800">
+            <p className="text-xs font-semibold text-amber-800">
               Bạn chưa thuộc đội nào
             </p>
             <p className="mt-0.5 text-xs text-slate-700">
@@ -429,7 +429,7 @@ export default function HomePage() {
                       }`}
                     >
                       <div className="flex items-center justify-between gap-2">
-                        <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-600">
+                        <span className="text-[11px] font-semibold text-indigo-600">
                           {ms.phase} · {ms.dateRange}
                         </span>
                         <div className="flex items-center gap-1.5">
@@ -471,7 +471,7 @@ export default function HomePage() {
 
             {/* Upcoming micro-schedule */}
             <div className="mt-4 border-t border-slate-100 pt-4">
-              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+              <p className="text-xs font-semibold text-slate-400">
                 Mốc gần nhất
               </p>
               <div className="mt-2 space-y-2">
@@ -546,7 +546,7 @@ export default function HomePage() {
                       rel="noreferrer"
                       className="min-w-0 flex-1"
                     >
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      <span className="text-[10px] font-semibold text-slate-400">
                         {LINK_CATEGORY_LABEL[link.category] ?? 'LIÊN KẾT'}
                       </span>
                       <p className="mt-0.5 text-sm font-semibold text-slate-900 hover:text-indigo-700">
@@ -587,7 +587,7 @@ export default function HomePage() {
 
       {/* Modal create announcement */}
       {showNewModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs">
+        <div className="ui-overlay fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs">
           <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold text-slate-900">
@@ -715,7 +715,7 @@ export default function HomePage() {
 
       {/* Modal create milestone */}
       {showMilestoneModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs">
+        <div className="ui-overlay fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs">
           <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold text-slate-900">
@@ -843,7 +843,7 @@ export default function HomePage() {
 
       {/* Modal create quick link */}
       {showQuickLinkModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs">
+        <div className="ui-overlay fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs">
           <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold text-slate-900">

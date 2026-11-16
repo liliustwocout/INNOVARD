@@ -5,6 +5,7 @@ import { useApp } from '@/context/AppContext';
 import { UserAvatar } from '@/components/ui/UserAvatar';
 import { isAdminEmail } from '@/lib/supabase-mappers';
 import type { Team, TeamRole } from '@/types/innovard';
+import { ProgressBar } from '@/components/ui/ProgressBar';
 
 const ROLE_CONFIG: Record<TeamRole, { label: string; badge: string }> = {
   admin: {
@@ -386,12 +387,7 @@ export default function TeamPage() {
                   {currentTeam.progress}%
                 </span>
               </div>
-              <div className="mt-2 h-2.5 w-full overflow-hidden rounded-full bg-slate-200">
-                <div
-                  className="h-full rounded-full bg-indigo-600"
-                  style={{ width: `${currentTeam.progress}%` }}
-                />
-              </div>
+              <ProgressBar value={currentTeam.progress} className="mt-2" />
             </div>
 
             <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-1">
@@ -603,7 +599,7 @@ export default function TeamPage() {
           {myPendingRequest && (
             <div className="flex flex-col justify-between gap-3 rounded-2xl border border-indigo-200 bg-indigo-50/70 p-4 sm:flex-row sm:items-center">
               <div>
-                <p className="text-xs font-bold uppercase tracking-wider text-indigo-700">
+                <p className="text-xs font-semibold text-indigo-700">
                   Yêu cầu đang chờ Admin duyệt
                 </p>
                 <p className="mt-0.5 text-sm font-semibold text-slate-900">
@@ -708,7 +704,7 @@ export default function TeamPage() {
 
       {/* Join Team Request Modal (Member) */}
       {joinTargetTeam && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs">
+        <div className="ui-overlay fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs">
           <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold text-slate-900">
@@ -762,7 +758,7 @@ export default function TeamPage() {
 
       {/* Create Team Modal (Admin) */}
       {isAdmin && showCreateTeam && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs">
+        <div className="ui-overlay fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs">
           <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold text-slate-900">Tạo đội mới</h3>
@@ -858,7 +854,7 @@ export default function TeamPage() {
 
       {/* Edit Team Modal (Admin) */}
       {isAdmin && showEditTeam && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs">
+        <div className="ui-overlay fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs">
           <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold text-slate-900">
@@ -999,7 +995,7 @@ export default function TeamPage() {
       {/* Add Member Modal (Admin) */}
       {isAdmin && showAddMember && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs"
+          className="ui-overlay fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs"
           onClick={() => setShowAddMember(false)}
         >
           <div

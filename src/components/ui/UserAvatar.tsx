@@ -36,7 +36,7 @@ export function UserAvatar({
     return (
       <div
         aria-label={name}
-        className={`${SIZE_CLASSES[size]} inline-flex shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-cyan-500 font-semibold text-white ring-2 ring-white ${className}`}
+        className={`${SIZE_CLASSES[size]} inline-flex shrink-0 items-center justify-center rounded-full bg-indigo-600 font-semibold text-white ring-2 ring-white ${className}`}
       >
         {getInitials(name)}
       </div>

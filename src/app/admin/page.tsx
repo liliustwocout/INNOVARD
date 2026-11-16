@@ -18,6 +18,8 @@ import type {
   Team,
   TeamRole,
 } from '@/types/innovard';
+import { ProgressBar } from '@/components/ui/ProgressBar';
+import { Toast } from '@/components/ui/Toast';
 
 const LOG_TYPE_META: Record<
   ActivityLogType,
@@ -287,7 +289,7 @@ export default function AdminPage() {
   if (!isAdmin) {
     return (
       <div className="mx-auto max-w-xl rounded-3xl border border-rose-200 bg-white p-8 text-center shadow-xs">
-        <span className="inline-block rounded-full bg-rose-50 px-3 py-1 text-xs font-bold uppercase tracking-wider text-rose-700">
+        <span className="inline-block rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700">
           Giới hạn quyền truy cập
         </span>
         <h1 className="mt-3 text-2xl font-extrabold text-slate-900">
@@ -418,13 +420,13 @@ export default function AdminPage() {
             </div>
             <div className="grid gap-3 md:grid-cols-2">
               <div className="rounded-xl border border-slate-200/80 bg-slate-50/70 p-3 text-xs leading-relaxed text-slate-700">
-                <p className="mb-1 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                <p className="mb-1 text-[11px] font-semibold text-slate-400">
                   Hôm qua làm gì
                 </p>
                 <p className="whitespace-pre-line">{su.yesterday}</p>
               </div>
               <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-3 text-xs leading-relaxed text-slate-700">
-                <p className="mb-1 text-[11px] font-bold uppercase tracking-wider text-indigo-600">
+                <p className="mb-1 text-[11px] font-semibold text-indigo-600">
                   Hôm nay làm gì
                 </p>
                 <p className="whitespace-pre-line">{su.today}</p>
@@ -453,13 +455,13 @@ export default function AdminPage() {
             </div>
             <div className="grid gap-3 md:grid-cols-2">
               <div className="rounded-xl border border-slate-200/80 bg-slate-50/70 p-3 text-xs leading-relaxed text-slate-700">
-                <p className="mb-1 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                <p className="mb-1 text-[11px] font-semibold text-slate-400">
                   Đã hoàn thành
                 </p>
                 <p className="whitespace-pre-line">{rep.done}</p>
               </div>
               <div className="rounded-xl border border-sky-100 bg-sky-50/40 p-3 text-xs leading-relaxed text-slate-700">
-                <p className="mb-1 text-[11px] font-bold uppercase tracking-wider text-sky-700">
+                <p className="mb-1 text-[11px] font-semibold text-sky-700">
                   Đang thực hiện
                 </p>
                 <p className="whitespace-pre-line">{rep.inProgress}</p>
@@ -526,12 +528,7 @@ export default function AdminPage() {
               </span>
             </div>
             {detailed && (
-              <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
-                <div
-                  className="h-full rounded-full bg-indigo-600 transition-all"
-                  style={{ width: `${tsk.progressPercent}%` }}
-                />
-              </div>
+              <ProgressBar value={tsk.progressPercent} />
             )}
           </div>
         );
@@ -700,7 +697,7 @@ export default function AdminPage() {
           <div className="space-y-3 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-xs">
             <div className="grid gap-3 sm:grid-cols-12">
               <div className="sm:col-span-3">
-                <label className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                <label className="mb-1 block text-[11px] font-semibold text-slate-400">
                   Tìm kiếm bài nộp / thành viên
                 </label>
                 <input
@@ -712,7 +709,7 @@ export default function AdminPage() {
                 />
               </div>
               <div className="sm:col-span-3">
-                <label className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                <label className="mb-1 block text-[11px] font-semibold text-slate-400">
                   Lọc theo Thành viên
                 </label>
                 <select
@@ -729,7 +726,7 @@ export default function AdminPage() {
                 </select>
               </div>
               <div className="sm:col-span-3">
-                <label className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                <label className="mb-1 block text-[11px] font-semibold text-slate-400">
                   Loại hoạt động
                 </label>
                 <select
@@ -749,7 +746,7 @@ export default function AdminPage() {
                 </select>
               </div>
               <div className="sm:col-span-3">
-                <label className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                <label className="mb-1 block text-[11px] font-semibold text-slate-400">
                   Lọc theo Đội
                 </label>
                 <select
@@ -1218,9 +1215,7 @@ export default function AdminPage() {
           </div>
 
           {cfgSavedNotice && (
-            <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
-              {cfgSavedNotice}
-            </div>
+            <Toast message={cfgSavedNotice} />
           )}
 
           <form
@@ -1604,7 +1599,7 @@ export default function AdminPage() {
 
       {/* Modal Create Team */}
       {showCreateTeam && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs">
+        <div className="ui-overlay fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs">
           <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold text-slate-900">Tạo đội mới</h3>
@@ -1726,7 +1721,7 @@ export default function AdminPage() {
 
       {/* Modal Edit Team */}
       {editingTeam && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs">
+        <div className="ui-overlay fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs">
           <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold text-slate-900">
@@ -1860,7 +1855,7 @@ export default function AdminPage() {
 
       {/* Modal Add User */}
       {showAddUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs">
+        <div className="ui-overlay fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs">
           <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold text-slate-900">
@@ -1964,7 +1959,7 @@ export default function AdminPage() {
       {/* Modal 1: Chi tiết Nhật ký & Bài nộp */}
       {selectedLog && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs"
+          className="ui-overlay fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs"
           onClick={() => setSelectedLogId(null)}
         >
           <div
@@ -2092,7 +2087,7 @@ export default function AdminPage() {
       {/* Modal 2: Hồ sơ Nhật ký & Bài nộp của Thành viên */}
       {inspectingUser && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs"
+          className="ui-overlay fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs"
           onClick={() => setInspectingUserId(null)}
         >
           <div
@@ -2280,13 +2275,13 @@ export default function AdminPage() {
                       </div>
                       <div className="mt-3 grid gap-3 md:grid-cols-2">
                         <div className="rounded-xl border border-slate-200/80 bg-slate-50/70 p-3 text-xs leading-relaxed text-slate-700">
-                          <p className="mb-1 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                          <p className="mb-1 text-[11px] font-semibold text-slate-400">
                             Hôm qua làm gì
                           </p>
                           <p className="whitespace-pre-line">{su.yesterday}</p>
                         </div>
                         <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-3 text-xs leading-relaxed text-slate-700">
-                          <p className="mb-1 text-[11px] font-bold uppercase tracking-wider text-indigo-600">
+                          <p className="mb-1 text-[11px] font-semibold text-indigo-600">
                             Hôm nay làm gì
                           </p>
                           <p className="whitespace-pre-line">{su.today}</p>
@@ -2353,12 +2348,7 @@ export default function AdminPage() {
                             </button>
                           </div>
                         </div>
-                        <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-slate-100">
-                          <div
-                            className="h-full rounded-full bg-indigo-600 transition-all"
-                            style={{ width: `${tsk.progressPercent}%` }}
-                          />
-                        </div>
+                        <ProgressBar value={tsk.progressPercent} className="mt-3" />
                       </article>
                     );
                   })
@@ -2394,13 +2384,13 @@ export default function AdminPage() {
                       </div>
                       <div className="mt-3 grid gap-3 md:grid-cols-2">
                         <div className="rounded-xl border border-slate-200/80 bg-slate-50/70 p-3 text-xs text-slate-700">
-                          <p className="mb-1 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                          <p className="mb-1 text-[11px] font-semibold text-slate-400">
                             Đã hoàn thành
                           </p>
                           <p className="whitespace-pre-line">{rep.done}</p>
                         </div>
                         <div className="rounded-xl border border-sky-100 bg-sky-50/40 p-3 text-xs text-slate-700">
-                          <p className="mb-1 text-[11px] font-bold uppercase tracking-wider text-sky-700">
+                          <p className="mb-1 text-[11px] font-semibold text-sky-700">
                             Đang thực hiện
                           </p>
                           <p className="whitespace-pre-line">{rep.inProgress}</p>

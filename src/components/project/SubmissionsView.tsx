@@ -12,6 +12,7 @@ import {
   STANDUP_WEEKDAY_OPTIONS,
 } from '@/lib/date-utils';
 import type { ReportLink, ReportLinkType } from '@/types/innovard';
+import { Toast } from '@/components/ui/Toast';
 
 const LINK_TYPE_META: Record<
   ReportLinkType,
@@ -336,7 +337,7 @@ export function SubmissionsView() {
       {isUnassignedMember && (
         <section className="flex flex-col justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50/70 p-4 sm:flex-row sm:items-center">
           <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-amber-800">
+            <p className="text-xs font-semibold text-amber-800">
               Bạn chưa tham gia đội nào
             </p>
             <p className="mt-0.5 text-xs text-slate-700">
@@ -670,15 +671,13 @@ export function SubmissionsView() {
             )}
 
             {standupSuccess && (
-              <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
-                Đã gửi Daily Standup thành công và lưu vào lịch sử nộp!
-              </div>
+              <Toast message={'Đã gửi Daily Standup thành công và lưu vào lịch sử nộp!'} />
             )}
 
             <form onSubmit={handleStandupSubmit} className="mt-5 space-y-4">
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
-                  <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-600">
+                  <label className="mb-1.5 block text-xs font-semibold text-slate-600">
                     1. Hôm qua làm gì? *
                   </label>
                   <textarea
@@ -692,7 +691,7 @@ export function SubmissionsView() {
                 </div>
 
                 <div>
-                  <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-indigo-600">
+                  <label className="mb-1.5 block text-xs font-semibold text-indigo-600">
                     2. Hôm nay làm gì? *
                   </label>
                   <textarea
@@ -707,7 +706,7 @@ export function SubmissionsView() {
               </div>
 
               <div>
-                <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-amber-700">
+                <label className="mb-1.5 block text-xs font-semibold text-amber-700">
                   3. Đang vướng (nếu có)
                 </label>
                 <textarea
@@ -923,7 +922,7 @@ export function SubmissionsView() {
                         >
                           <div className="grid gap-3 md:grid-cols-2">
                             <div>
-                              <label className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                              <label className="mb-1 block text-[11px] font-semibold text-slate-500">
                                 Hôm qua làm gì
                               </label>
                               <textarea
@@ -935,7 +934,7 @@ export function SubmissionsView() {
                               />
                             </div>
                             <div>
-                              <label className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-indigo-600">
+                              <label className="mb-1 block text-[11px] font-semibold text-indigo-600">
                                 Hôm nay làm gì
                               </label>
                               <textarea
@@ -948,7 +947,7 @@ export function SubmissionsView() {
                             </div>
                           </div>
                           <div>
-                            <label className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-amber-700">
+                            <label className="mb-1 block text-[11px] font-semibold text-amber-700">
                               Đang vướng (tùy chọn)
                             </label>
                             <textarea
@@ -978,13 +977,13 @@ export function SubmissionsView() {
                         <>
                           <div className="mt-3 grid gap-3 md:grid-cols-2">
                             <div className="rounded-xl bg-white p-3 text-xs leading-relaxed text-slate-700">
-                              <p className="mb-1 font-bold uppercase tracking-wider text-slate-400">
+                              <p className="mb-1 font-semibold text-slate-400">
                                 Hôm qua làm gì
                               </p>
                               <p className="whitespace-pre-line">{item.yesterday}</p>
                             </div>
                             <div className="rounded-xl bg-white p-3 text-xs leading-relaxed text-slate-700">
-                              <p className="mb-1 font-bold uppercase tracking-wider text-indigo-500">
+                              <p className="mb-1 font-semibold text-indigo-500">
                                 Hôm nay làm gì
                               </p>
                               <p className="whitespace-pre-line">{item.today}</p>
@@ -1029,9 +1028,7 @@ export function SubmissionsView() {
             </div>
 
             {reportSuccess && (
-              <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
-                Đã lưu báo cáo họp nhóm thành công!
-              </div>
+              <Toast message={'Đã lưu báo cáo họp nhóm thành công!'} />
             )}
 
             <form onSubmit={handleMeetingReportSubmit} className="mt-5 space-y-4">
@@ -1065,7 +1062,7 @@ export function SubmissionsView() {
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
-                  <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-emerald-700">
+                  <label className="mb-1 block text-xs font-semibold text-emerald-700">
                     Đã làm *
                   </label>
                   <textarea
@@ -1079,7 +1076,7 @@ export function SubmissionsView() {
                 </div>
 
                 <div>
-                  <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-indigo-600">
+                  <label className="mb-1 block text-xs font-semibold text-indigo-600">
                     Đang làm *
                   </label>
                   <textarea
@@ -1094,7 +1091,7 @@ export function SubmissionsView() {
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-amber-700">
+                <label className="mb-1 block text-xs font-semibold text-amber-700">
                   Đang vướng (nếu có)
                 </label>
                 <textarea
@@ -1110,7 +1107,7 @@ export function SubmissionsView() {
               <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
                 <div className="flex items-center justify-between gap-2">
                   <div>
-                    <p className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                    <p className="text-xs font-semibold text-slate-700">
                       Link đính kèm (GitHub, Demo, Tài liệu liên quan)
                     </p>
                     <p className="text-[11px] text-slate-500">
@@ -1179,7 +1176,7 @@ export function SubmissionsView() {
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-violet-700">
+                <label className="mb-1 block text-xs font-semibold text-violet-700">
                   Câu hỏi thắc mắc
                 </label>
                 <textarea
@@ -1443,7 +1440,7 @@ export function SubmissionsView() {
                       <>
                         <div className="mt-4 grid gap-4 md:grid-cols-2">
                           <div className="rounded-2xl bg-emerald-50/60 p-4">
-                            <p className="text-xs font-bold uppercase tracking-wider text-emerald-700">
+                            <p className="text-xs font-semibold text-emerald-700">
                               Đã làm
                             </p>
                             <p className="mt-1.5 text-sm leading-relaxed text-slate-700">
@@ -1451,7 +1448,7 @@ export function SubmissionsView() {
                             </p>
                           </div>
                           <div className="rounded-2xl bg-indigo-50/60 p-4">
-                            <p className="text-xs font-bold uppercase tracking-wider text-indigo-700">
+                            <p className="text-xs font-semibold text-indigo-700">
                               Đang làm
                             </p>
                             <p className="mt-1.5 text-sm leading-relaxed text-slate-700">
@@ -1469,7 +1466,7 @@ export function SubmissionsView() {
 
                         {rep.links.length > 0 && (
                           <div className="mt-4">
-                            <p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">
+                            <p className="mb-2 text-xs font-semibold text-slate-500">
                               Liên kết đính kèm
                             </p>
                             <div className="flex flex-wrap gap-2">

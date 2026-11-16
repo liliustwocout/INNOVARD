@@ -423,7 +423,7 @@ export function OnboardingTour() {
       {/* Focused spotlight cutout: surrounding area darkened, target stays bright */}
       <div
         aria-hidden="true"
-        className="pointer-events-none fixed z-[101] rounded-2xl ring-4 ring-indigo-500/90 ring-offset-2 ring-offset-white/20 transition-all duration-200 ease-out"
+        className="pointer-events-none fixed z-[101] rounded-2xl ring-4 ring-indigo-500/90 ring-offset-2 ring-offset-white/20 transition duration-200 ease-out"
         style={{
           top: targetBox.top,
           left: targetBox.left,
@@ -436,7 +436,7 @@ export function OnboardingTour() {
       {/* Floating instruction card */}
       <div
         ref={cardRef}
-        className="fixed z-[102] w-[min(92vw,368px)] rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl transition-all duration-200 ease-out"
+        className="fixed z-[102] w-[min(92vw,368px)] rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl transition duration-200 ease-out"
         style={{
           top: tooltipPosition.top,
           left: tooltipPosition.left,
@@ -476,7 +476,7 @@ export function OnboardingTour() {
               type="button"
               aria-label={`Đi tới bước ${idx + 1}: ${step.title}`}
               onClick={() => setStepIndex(idx)}
-              className={`h-1.5 rounded-full transition-all ${
+              className={`h-1.5 rounded-full transition ${
                 idx === stepIndex
                   ? 'w-5 bg-indigo-600'
                   : idx < stepIndex

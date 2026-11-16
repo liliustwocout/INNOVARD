@@ -1,8 +1,19 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import {
+  ClipboardList,
+  Compass,
+  LayoutDashboard,
+  LogOut,
+  Menu,
+  Search,
+  TrendingUp,
+  CalendarDays,
+  X,
+} from 'lucide-react';
 import { useApp } from '@/context/AppContext';
 import { getTodayISO } from '@/lib/date-utils';
 import { UserAvatar } from '@/components/ui/UserAvatar';
@@ -10,22 +21,56 @@ import {
   OnboardingTour,
   triggerOnboardingTour,
 } from '@/components/onboarding/OnboardingTour';
-
-interface NavEntry {
-  href: string;
-  label: string;
-  badgeCount?: number;
-}
-
-interface NavGroup {
-  groupLabel: string;
-  items: NavEntry[];
-}
+import { AppSkeleton } from '@/components/layout/AppSkeleton';
+import { CommandPalette } from '@/components/layout/CommandPalette';
+import {
+  NAV_GROUPS,
+  isNavItemActive,
+  readVisitCounts,
+  recordVisit,
+  type NavItem,
+  type VisitCounts,
+} from '@/lib/navigation';
 
 const ROLE_LABELS: Record<string, string> = {
   admin: 'Admin',
   member: 'Thành viên',
 };
+
+/**
+ * Fitts's law + frequency of use: the daily jobs (standup, progress, calendar, overview)
+ * sit in the thumb zone on phones; everything else is one tap away in the menu.
+ */
+const MOBILE_TABS = [
+  { href: '/overview', label: 'Tổng quan', icon: LayoutDashboard },
+  { href: '/project/submissions', label: 'Bài nộp', icon: ClipboardList },
+  { href: '/project/progress', label: 'Tiến độ', icon: TrendingUp },
+  { href: '/calendar', label: 'Lịch', icon: CalendarDays },
+];
+
+/** Secondary action: the badge bumps whenever its number changes. */
+function CountBadge({ count, active }: { count: number; active: boolean }) {
+  const prev = useRef(count);
+  const [bump, setBump] = useState(0);
+
+  useEffect(() => {
+    if (prev.current !== count) {
+      prev.current = count;
+      setBump((b) => b + 1);
+    }
+  }, [count]);
+
+  return (
+    <span
+      key={bump}
+      className={`tabular ml-2 inline-flex min-w-6 justify-center rounded-full px-1.5 py-0.5 text-[11px] font-semibold ${
+        bump ? 'ui-bump' : ''
+      } ${active ? 'bg-white/15 text-white' : 'bg-white/8 text-[var(--rail-muted)]'}`}
+    >
+      {count}
+    </span>
+  );
+}
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -46,8 +91,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   } = useApp();
 
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const searchInputRef = useRef<HTMLInputElement>(null);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [pendingHref, setPendingHref] = useState<string | null>(null);
+  const [visitCounts, setVisitCounts] = useState<VisitCounts>({});
+
+  const navRef = useRef<HTMLElement>(null);
+  const [indicator, setIndicator] = useState<{ y: number; visible: boolean }>({
+    y: 0,
+    visible: false,
+  });
 
   const isLoginRoute = pathname === '/login';
 
@@ -58,25 +110,59 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     }
   }, [isHydrated, currentUser, isLoginRoute, router]);
 
+  // Route settled: close the drawer, stop the progress bar, count the visit
   useEffect(() => {
     setMobileOpen(false);
-  }, [pathname]);
+    setPendingHref(null);
+    if (!isLoginRoute) {
+      setVisitCounts(recordVisit(pathname));
+    }
+  }, [pathname, isLoginRoute]);
 
-  // Press '/' to focus quick page search
+  useEffect(() => {
+    setVisitCounts(readVisitCounts());
+  }, []);
+
+  // Jakob's law: Ctrl/⌘ K opens the palette, "/" too, Esc closes overlays
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
       const isTyping =
         target?.tagName === 'INPUT' ||
         target?.tagName === 'TEXTAREA' ||
-        target?.tagName === 'SELECT';
+        target?.tagName === 'SELECT' ||
+        target?.isContentEditable;
+
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setPaletteOpen((open) => !open);
+        return;
+      }
       if (e.key === '/' && !isTyping) {
         e.preventDefault();
-        searchInputRef.current?.focus();
+        setPaletteOpen(true);
+        return;
+      }
+      if (e.key === 'Escape') {
+        setMobileOpen(false);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  // Exaggerated feedback: a field the browser rejects on submit shakes once
+  useEffect(() => {
+    const handleInvalid = (e: Event) => {
+      const el = e.target as HTMLElement | null;
+      if (!el?.classList) return;
+      el.classList.remove('ui-shake');
+      void el.offsetWidth;
+      el.classList.add('ui-shake');
+      window.setTimeout(() => el.classList.remove('ui-shake'), 400);
+    };
+    document.addEventListener('invalid', handleInvalid, true);
+    return () => document.removeEventListener('invalid', handleInvalid, true);
   }, []);
 
   const todayISO = getTodayISO();
@@ -96,164 +182,60 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return joinRequests.length + todaySubmissions;
   }, [activityLogs, joinRequests.length, todayISO]);
 
-  const navGroups: NavGroup[] = useMemo(() => {
-    const base: NavGroup[] = [
-      {
-        groupLabel: 'TÔI',
-        items: [
-          { href: '/overview', label: 'Trang tổng quan' },
-          { href: '/', label: 'Trang chủ' },
-          { href: '/profile', label: 'Hồ sơ của tôi' },
-        ],
-      },
-      {
-        groupLabel: 'ĐỘI CỦA TÔI',
-        items: [{ href: '/team', label: 'Đội của tôi' }],
-      },
-      {
-        groupLabel: 'DỰ ÁN',
-        items: [
-          { href: '/project/submissions', label: 'Bài nộp của tôi' },
-          { href: '/project/progress', label: 'Tiến độ của tôi' },
-        ],
-      },
-      {
-        groupLabel: 'SỰ KIỆN',
-        items: [
-          {
-            href: '/calendar',
-            label: 'Lịch sự kiện',
-            badgeCount: upcomingEventsCount,
-          },
-        ],
-      },
-    ];
+  const badgeFor = useCallback(
+    (href: string): number | undefined => {
+      if (href === '/calendar') return upcomingEventsCount;
+      if (href === '/admin') return adminBadgeCount;
+      return undefined;
+    },
+    [upcomingEventsCount, adminBadgeCount]
+  );
 
-    if (isAdmin) {
-      base.push({
-        groupLabel: 'QUẢN TRỊ',
-        items: [
-          {
-            href: '/admin',
-            label: 'Quản trị & Nhật ký',
-            badgeCount: adminBadgeCount,
-          },
-        ],
-      });
+  const visibleGroups = useMemo(
+    () =>
+      NAV_GROUPS.map((g) => ({
+        ...g,
+        items: g.items.filter((item) => !item.adminOnly || isAdmin),
+      })).filter((g) => g.items.length > 0),
+    [isAdmin]
+  );
+
+  const visibleItems: NavItem[] = useMemo(
+    () => visibleGroups.flatMap((g) => g.items),
+    [visibleGroups]
+  );
+
+  // Follow through: the active marker slides to the current item and settles
+  useLayoutEffect(() => {
+    const nav = navRef.current;
+    if (!nav) return;
+    const active = nav.querySelector<HTMLElement>('[data-active="true"]');
+    if (!active) {
+      setIndicator((s) => ({ ...s, visible: false }));
+      return;
     }
+    setIndicator({ y: active.offsetTop, visible: true });
+  }, [pathname, visibleGroups, isHydrated, currentUser]);
 
-    return base;
-  }, [upcomingEventsCount, isAdmin, adminBadgeCount]);
+  const navigate = useCallback(
+    (href: string) => {
+      if (href !== pathname) setPendingHref(href);
+      router.push(href);
+    },
+    [pathname, router]
+  );
 
-  const filteredGroups = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    if (!q) return navGroups;
-    return navGroups
-      .map((group) => ({
-        ...group,
-        items: group.items.filter(
-          (item) =>
-            item.label.toLowerCase().includes(q) ||
-            group.groupLabel.toLowerCase().includes(q)
-        ),
-      }))
-      .filter((group) => group.items.length > 0);
-  }, [navGroups, searchQuery]);
+  const startTour = useCallback(() => {
+    setMobileOpen(false);
+    triggerOnboardingTour();
+  }, []);
 
   if (isLoginRoute) {
     return <>{children}</>;
   }
 
   if (!isHydrated || !currentUser) {
-    return (
-      <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-slate-50 px-4">
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 bg-[radial-gradient(#cbd5e1_1px,transparent_1px)] [background-size:20px_20px] opacity-40"
-        />
-        <div
-          aria-hidden="true"
-          className="innovard-float pointer-events-none absolute -top-24 -left-24 h-80 w-80 rounded-full bg-indigo-200/40 blur-3xl"
-        />
-        <div
-          aria-hidden="true"
-          className="innovard-float pointer-events-none absolute -right-24 -bottom-24 h-80 w-80 rounded-full bg-sky-200/40 blur-3xl"
-          style={{ animationDelay: '1.2s' }}
-        />
-
-        <div className="relative w-full max-w-md rounded-3xl border border-slate-200/90 bg-white/95 p-8 text-center shadow-xl shadow-slate-900/5 backdrop-blur-xs">
-          {/* Dual-ring orbital loader */}
-          <div className="relative mx-auto flex h-20 w-20 items-center justify-center">
-            <div className="absolute inset-0 animate-spin rounded-full border-[3px] border-slate-100 border-t-indigo-600 border-r-sky-500" />
-            <div className="innovard-spin-reverse absolute inset-2.5 rounded-full border-2 border-transparent border-b-indigo-400 border-l-sky-400" />
-            <img
-              src="/logo.png"
-              alt="INNOVARD"
-              className="h-11 w-11 rounded-full object-cover shadow-sm ring-1 ring-indigo-100"
-            />
-          </div>
-
-          <span className="mt-5 inline-block rounded-full border border-indigo-200 bg-indigo-50 px-3 py-0.5 text-[10px] font-bold uppercase tracking-widest text-indigo-700">
-            WORKSPACE HUB
-          </span>
-
-          <p className="innovard-shimmer mt-2 bg-gradient-to-r from-indigo-600 via-sky-500 to-indigo-600 bg-clip-text text-2xl font-black tracking-tight text-transparent">
-            INNOVARD
-          </p>
-
-          <div className="mt-2 flex items-center justify-center gap-1.5">
-            <p className="text-sm font-medium text-slate-600">
-              Đang tải không gian làm việc...
-            </p>
-            <span className="inline-flex items-center gap-1">
-              <span
-                className="innovard-dot-bounce h-1.5 w-1.5 rounded-full bg-indigo-600"
-                style={{ animationDelay: '0ms' }}
-              />
-              <span
-                className="innovard-dot-bounce h-1.5 w-1.5 rounded-full bg-indigo-500"
-                style={{ animationDelay: '150ms' }}
-              />
-              <span
-                className="innovard-dot-bounce h-1.5 w-1.5 rounded-full bg-sky-500"
-                style={{ animationDelay: '300ms' }}
-              />
-            </span>
-          </div>
-
-          {/* Indeterminate progress bar */}
-          <div className="mt-5 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
-            <div className="innovard-progress h-full w-2/5 rounded-full bg-gradient-to-r from-indigo-600 via-sky-500 to-indigo-600" />
-          </div>
-
-          {/* Mini workspace skeleton preview */}
-          <div className="mt-6 grid grid-cols-3 gap-2.5 border-t border-slate-100 pt-5">
-            <div className="animate-pulse space-y-2 rounded-xl border border-slate-100 bg-slate-50/80 p-3">
-              <div className="h-2 w-10 rounded-full bg-slate-200" />
-              <div className="h-3.5 w-12 rounded-md bg-indigo-100" />
-            </div>
-            <div
-              className="animate-pulse space-y-2 rounded-xl border border-slate-100 bg-slate-50/80 p-3"
-              style={{ animationDelay: '150ms' }}
-            >
-              <div className="h-2 w-12 rounded-full bg-slate-200" />
-              <div className="h-3.5 w-10 rounded-md bg-sky-100" />
-            </div>
-            <div
-              className="animate-pulse space-y-2 rounded-xl border border-slate-100 bg-slate-50/80 p-3"
-              style={{ animationDelay: '300ms' }}
-            >
-              <div className="h-2 w-9 rounded-full bg-slate-200" />
-              <div className="h-3.5 w-11 rounded-md bg-slate-200" />
-            </div>
-          </div>
-
-          <p className="mt-3 text-[11px] font-medium text-slate-400">
-            Đồng bộ xác thực · Nạp dữ liệu đội nhóm · Khởi tạo giao diện
-          </p>
-        </div>
-      </div>
-    );
+    return <AppSkeleton />;
   }
 
   const handleLogout = async () => {
@@ -261,231 +243,226 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     router.push('/login');
   };
 
-  const renderSidebarInner = (isMobile = false) => (
-    <div className="flex h-full flex-col">
-      {/* Brand & Team Switcher */}
-      <div className="border-b border-slate-200/80 px-4 py-4">
-        <div className="flex items-center justify-between gap-2">
-          <Link href="/overview" className="flex min-w-0 items-center gap-2.5">
-            <img
-              src="/logo.png"
-              alt="INNOVARD"
-              className="h-9 w-9 shrink-0 rounded-xl object-cover shadow-xs ring-1 ring-slate-200/80"
-            />
-            <div className="min-w-0">
-              <span className="block truncate text-base font-extrabold tracking-tight text-slate-900">
-                INNOVARD
-              </span>
-              <span className="block text-[11px] font-medium text-slate-500">
-                Team Hub · {currentTeam.id ? currentTeam.code : 'Chưa có đội'}
-              </span>
-            </div>
-          </Link>
+  const handleLinkClick = (href: string) => {
+    if (href !== pathname) setPendingHref(href);
+  };
 
-          {isMobile && (
-            <button
-              type="button"
-              onClick={() => setMobileOpen(false)}
-              className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-100"
-            >
-              Đóng
-            </button>
-          )}
-        </div>
+  const teamScope = isAdmin ? (
+    <div>
+      <label
+        htmlFor="team-switcher"
+        className="mb-1.5 block text-xs font-medium text-[var(--rail-muted)]"
+      >
+        Đội đang xem
+      </label>
+      <select
+        id="team-switcher"
+        value={currentTeamId}
+        onChange={(e) => setCurrentTeamId(e.target.value)}
+        className="h-10 w-full cursor-pointer rounded-xl border border-[var(--rail-line)] bg-[var(--rail-raised)] px-3 text-sm font-medium text-[var(--rail-fg)] outline-none transition-colors hover:border-[var(--rail-muted)]"
+      >
+        {teams.map((team) => (
+          <option key={team.id} value={team.id} className="bg-white text-slate-900">
+            {team.name} ({team.code})
+            {team.id === currentUser.teamId ? ' — đội của tôi' : ''}
+          </option>
+        ))}
+      </select>
 
-        {/* Team Scope Block (Admin switcher vs Member fixed team) */}
-        {isAdmin ? (
-          <div className="mt-3">
-            <label
-              htmlFor={isMobile ? 'team-switcher-mobile' : 'team-switcher-desktop'}
-              className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-slate-400"
-            >
-              Đội đang xem (Admin)
-            </label>
-            <select
-              id={isMobile ? 'team-switcher-mobile' : 'team-switcher-desktop'}
-              value={currentTeamId}
-              onChange={(e) => setCurrentTeamId(e.target.value)}
-              className="w-full cursor-pointer rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-800 outline-none focus:border-indigo-500"
-            >
-              {teams.map((team) => (
-                <option key={team.id} value={team.id}>
-                  {team.name} ({team.code})
-                  {team.id === currentUser.teamId ? ' - Đội của tôi' : ''}
-                </option>
-              ))}
-            </select>
-
-            {currentTeam.id !== currentUser.teamId && (
-              <button
-                type="button"
-                onClick={() => setCurrentTeamId(currentUser.teamId)}
-                className="mt-2 w-full rounded-lg bg-indigo-50 px-2.5 py-1.5 text-[11px] font-semibold text-indigo-700 hover:bg-indigo-100"
-              >
-                Quay về đội của tôi
-              </button>
-            )}
-          </div>
-        ) : currentTeam.id ? (
-          <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-              Đội của tôi
-            </p>
-            <p className="mt-0.5 truncate text-xs font-bold text-slate-900">
-              {currentTeam.name} · {currentTeam.code}
-            </p>
-            <Link
-              href="/team"
-              className="mt-1.5 inline-block text-[11px] font-semibold text-indigo-600 hover:underline"
-            >
-              Xin gia nhập đội khác
-            </Link>
-          </div>
-        ) : (
-          <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50/70 px-3 py-2.5">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-amber-700">
-              Trạng thái đội
-            </p>
-            <p className="mt-0.5 truncate text-xs font-bold text-slate-900">
-              Chưa có đội
-            </p>
-            <Link
-              href="/team"
-              className="mt-1.5 inline-block text-[11px] font-semibold text-indigo-600 hover:underline"
-            >
-              Chọn đội để xin gia nhập
-            </Link>
-          </div>
-        )}
-
-        {/* Quick Search */}
-        <div
-          data-tour={isMobile ? undefined : 'sidebar-search'}
-          className="mt-3 flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 focus-within:border-indigo-400 focus-within:bg-white"
-        >
-          <input
-            ref={isMobile ? undefined : searchInputRef}
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Tìm trang..."
-            className="w-full bg-transparent text-xs text-slate-800 outline-none placeholder:text-slate-400"
-          />
-          <kbd className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-slate-400">
-            /
-          </kbd>
-        </div>
-      </div>
-
-      {/* Grouped Navigation */}
-      <nav className="flex-1 space-y-5 overflow-y-auto px-3 py-4">
-        {filteredGroups.length === 0 ? (
-          <p className="px-2 text-xs text-slate-400">
-            Không tìm thấy trang phù hợp.
-          </p>
-        ) : (
-          filteredGroups.map((group) => (
-            <div key={group.groupLabel}>
-              <p className="mb-1.5 px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                {group.groupLabel}
-              </p>
-              <div className="space-y-1">
-                {group.items.map((item) => {
-                  const isActive =
-                    item.href === '/project/submissions'
-                      ? pathname === '/project/submissions' || pathname === '/project'
-                      : pathname === item.href;
-
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      data-tour={isMobile ? undefined : `nav-${item.href}`}
-                      className={`flex items-center justify-between rounded-xl px-3.5 py-2.5 text-sm font-medium transition ${
-                        isActive
-                          ? 'bg-indigo-600 text-white shadow-xs'
-                          : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                      }`}
-                    >
-                      <span className="truncate">{item.label}</span>
-                      {typeof item.badgeCount === 'number' && (
-                        <span
-                          className={`ml-2 rounded-full px-2 py-0.5 text-[11px] font-bold ${
-                            isActive
-                              ? 'bg-white/20 text-white'
-                              : 'bg-indigo-50 text-indigo-700'
-                          }`}
-                        >
-                          {item.badgeCount}
-                        </span>
-                      )}
-                    </Link>
-                  );
-                })}
-              </div>
-            </div>
-          ))
-        )}
-      </nav>
-
-      {/* Bottom User Card (Google Name + Avatar + Logout) */}
-      <div className="border-t border-slate-200/80 p-3.5">
+      {currentTeam.id !== currentUser.teamId && (
         <button
           type="button"
-          onClick={() => {
-            if (isMobile) setMobileOpen(false);
-            triggerOnboardingTour();
-          }}
-          className="mb-2.5 flex w-full items-center justify-between rounded-xl border border-indigo-200/80 bg-indigo-50/70 px-3 py-1.5 text-left text-xs font-semibold text-indigo-700 transition hover:bg-indigo-100/80"
+          onClick={() => setCurrentTeamId(currentUser.teamId)}
+          className="mt-2 text-xs font-semibold text-[var(--rail-active)] transition-opacity hover:opacity-80"
         >
-          <span>Hướng dẫn sử dụng</span>
-          <span className="rounded-md bg-white px-1.5 py-0.5 text-[10px] font-bold text-indigo-600">
-            Tour
+          Quay về đội của tôi
+        </button>
+      )}
+    </div>
+  ) : currentTeam.id ? (
+    <Link
+      href="/team"
+      onClick={() => handleLinkClick('/team')}
+      className="group block rounded-xl border border-[var(--rail-line)] bg-[var(--rail-raised)] px-3 py-2.5 transition-colors hover:border-[var(--rail-muted)]"
+    >
+      <span className="block text-xs text-[var(--rail-muted)]">Đội của tôi</span>
+      <span className="mt-0.5 block truncate text-sm font-semibold text-[var(--rail-fg)]">
+        {currentTeam.name}
+        <span className="ml-1.5 font-normal text-[var(--rail-muted)]">{currentTeam.code}</span>
+      </span>
+    </Link>
+  ) : (
+    <Link
+      href="/team"
+      onClick={() => handleLinkClick('/team')}
+      className="block rounded-xl border border-amber-400/40 bg-amber-400/10 px-3 py-2.5 transition-colors hover:bg-amber-400/15"
+    >
+      <span className="block text-sm font-semibold text-amber-200">Bạn chưa có đội</span>
+      <span className="mt-0.5 block text-xs text-amber-100/80">Chọn đội để xin gia nhập</span>
+    </Link>
+  );
+
+  const renderSidebarInner = (isMobile = false) => (
+    <div className="flex h-full flex-col text-[var(--rail-fg)]">
+      {/* Brand */}
+      <div className="flex items-center justify-between gap-2 px-4 pt-5 pb-4">
+        <Link
+          href="/overview"
+          onClick={() => handleLinkClick('/overview')}
+          className="flex min-w-0 items-center gap-3 rounded-lg"
+        >
+          <img
+            src="/logo.png"
+            alt=""
+            className="h-9 w-9 shrink-0 rounded-xl object-cover ring-1 ring-white/10"
+          />
+          <span className="min-w-0">
+            <span className="block truncate text-[15px] font-bold tracking-tight">INNOVARD</span>
+            <span className="block truncate text-xs text-[var(--rail-muted)]">Team hub</span>
           </span>
+        </Link>
+
+        {isMobile && (
+          <button
+            type="button"
+            onClick={() => setMobileOpen(false)}
+            aria-label="Đóng menu"
+            className="ui-hit flex h-9 w-9 items-center justify-center rounded-lg text-[var(--rail-muted)] transition-colors hover:bg-white/8 hover:text-[var(--rail-fg)]"
+          >
+            <X aria-hidden="true" className="h-5 w-5" />
+          </button>
+        )}
+      </div>
+
+      <div className="space-y-3 px-4">
+        {teamScope}
+
+        {/* Quick search → command palette */}
+        <button
+          type="button"
+          data-tour={isMobile ? undefined : 'sidebar-search'}
+          onClick={() => setPaletteOpen(true)}
+          className="flex h-10 w-full items-center gap-2.5 rounded-xl border border-[var(--rail-line)] px-3 text-left text-sm text-[var(--rail-muted)] transition-colors hover:border-[var(--rail-muted)] hover:text-[var(--rail-fg)]"
+        >
+          <Search aria-hidden="true" className="h-4 w-4 shrink-0" />
+          <span className="flex-1 truncate">Tìm trang, thao tác…</span>
+          <kbd className="rounded-md border border-[var(--rail-line)] px-1.5 py-0.5 text-[10px] font-semibold">
+            Ctrl K
+          </kbd>
+        </button>
+      </div>
+
+      {/* Navigation */}
+      <nav
+        ref={isMobile ? undefined : navRef}
+        aria-label="Điều hướng chính"
+        className="relative mt-5 flex-1 overflow-y-auto px-3 pb-4"
+      >
+        {!isMobile && (
+          <span
+            aria-hidden="true"
+            className="ui-nav-indicator pointer-events-none absolute top-0 right-3 left-3 h-10 rounded-xl bg-white/10"
+            style={{
+              transform: `translateY(${indicator.y}px)`,
+              opacity: indicator.visible ? 1 : 0,
+            }}
+          >
+            <span className="absolute top-2.5 bottom-2.5 left-0 w-[3px] rounded-full bg-[var(--rail-active)]" />
+          </span>
+        )}
+
+        {visibleGroups.map((group) => (
+          <div key={group.id} className="mb-5 last:mb-0">
+            <p className="mb-1 px-3 text-xs font-medium text-[var(--rail-muted)]/80">
+              {group.label}
+            </p>
+            <ul className="space-y-0.5">
+              {group.items.map((item) => {
+                const isActive = isNavItemActive(item.href, pathname);
+                const isPending = pendingHref === item.href;
+                const Icon = item.icon;
+                const badge = badgeFor(item.href);
+                return (
+                  <li key={item.href}>
+                    <Link
+                      href={item.href}
+                      onClick={() => handleLinkClick(item.href)}
+                      data-active={isActive ? 'true' : undefined}
+                      data-tour={isMobile ? undefined : `nav-${item.href}`}
+                      aria-current={isActive ? 'page' : undefined}
+                      className={`group relative flex h-10 items-center gap-3 rounded-xl px-3 text-sm transition-colors ${
+                        isActive
+                          ? `font-semibold text-white ${isMobile ? 'bg-white/10' : ''}`
+                          : 'text-[var(--rail-muted)] hover:bg-white/5 hover:text-[var(--rail-fg)]'
+                      }`}
+                    >
+                      <Icon
+                        aria-hidden="true"
+                        className={`h-[18px] w-[18px] shrink-0 transition-transform duration-200 ease-out group-active:scale-90 ${
+                          isActive ? 'text-[var(--rail-active)]' : ''
+                        } ${isPending ? 'animate-pulse' : ''}`}
+                      />
+                      <span className="flex-1 truncate">{item.label}</span>
+                      {typeof badge === 'number' && badge > 0 && (
+                        <CountBadge count={badge} active={isActive} />
+                      )}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ))}
+      </nav>
+
+      {/* Footer: tour, status, user */}
+      <div className="space-y-2 border-t border-[var(--rail-line)] p-3">
+        <button
+          type="button"
+          onClick={startTour}
+          className="flex h-9 w-full items-center gap-3 rounded-lg px-3 text-left text-sm text-[var(--rail-muted)] transition-colors hover:bg-white/5 hover:text-[var(--rail-fg)]"
+        >
+          <Compass aria-hidden="true" className="h-4 w-4" />
+          Hướng dẫn sử dụng
         </button>
 
-        <div data-tour={isMobile ? undefined : 'sidebar-user'}>
-          <div className="mb-2.5 flex items-center justify-between px-1 text-[11px]">
-            <span className="font-medium text-slate-500">Trạng thái</span>
-            <span
-              className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                isSupabaseEnabled
-                  ? 'bg-emerald-100 text-emerald-700'
-                  : 'bg-amber-100 text-amber-800'
-              }`}
-            >
-              {isSupabaseEnabled ? 'Supabase Live' : 'Chưa kết nối DB'}
+        <div
+          data-tour={isMobile ? undefined : 'sidebar-user'}
+          className="flex items-center gap-2 rounded-xl bg-[var(--rail-raised)] p-2"
+        >
+          <Link
+            href="/profile"
+            onClick={() => handleLinkClick('/profile')}
+            className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg"
+          >
+            <UserAvatar src={currentUser.avatarUrl} name={currentUser.name} size="sm" />
+            <span className="min-w-0">
+              <span className="block truncate text-sm font-semibold">{currentUser.name}</span>
+              <span className="flex items-center gap-1.5 truncate text-xs text-[var(--rail-muted)]">
+                {ROLE_LABELS[currentUser.role] ?? 'Thành viên'}
+                <span
+                  title={isSupabaseEnabled ? 'Đã kết nối Supabase' : 'Chưa kết nối cơ sở dữ liệu'}
+                  className={`rounded px-1 text-[10px] font-semibold ${
+                    isSupabaseEnabled
+                      ? 'bg-emerald-400/15 text-emerald-300'
+                      : 'bg-amber-400/15 text-amber-200'
+                  }`}
+                >
+                  {isSupabaseEnabled ? 'Live' : 'Offline'}
+                </span>
+              </span>
             </span>
-          </div>
+          </Link>
 
-          <div className="flex items-center justify-between gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-2.5">
-            <Link
-              href="/profile"
-              className="flex min-w-0 flex-1 items-center gap-2.5"
-            >
-              <UserAvatar
-                src={currentUser.avatarUrl}
-                name={currentUser.name}
-                size="sm"
-              />
-              <div className="min-w-0">
-                <p className="truncate text-xs font-bold text-slate-900">
-                  {currentUser.name}
-                </p>
-                <p className="truncate text-[11px] text-slate-500">
-                  {ROLE_LABELS[currentUser.role] ?? 'Thành viên'} · {currentUser.email}
-                </p>
-              </div>
-            </Link>
-
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="shrink-0 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-600 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"
-            >
-              Thoát
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={handleLogout}
+            aria-label="Đăng xuất"
+            title="Đăng xuất"
+            className="ui-hit flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[var(--rail-muted)] transition-colors hover:bg-rose-500/15 hover:text-rose-300"
+          >
+            <LogOut aria-hidden="true" className="h-4 w-4" />
+          </button>
         </div>
       </div>
     </div>
@@ -493,58 +470,134 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-screen bg-slate-50 text-slate-900">
-      {/* Desktop Sidebar */}
-      <aside className="sticky top-0 hidden h-screen w-68 shrink-0 flex-col border-r border-slate-200/80 bg-white lg:flex">
-        {renderSidebarInner(false)}
-      </aside>
-
-      {/* Mobile Drawer */}
-      {mobileOpen && (
-        <div className="fixed inset-0 z-50 flex lg:hidden">
-          <div
-            className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs"
-            onClick={() => setMobileOpen(false)}
-          />
-          <aside className="relative z-10 flex h-full w-72 flex-col bg-white shadow-xl">
-            {renderSidebarInner(true)}
-          </aside>
+      {/* Doherty threshold: feedback the instant a route is requested */}
+      {pendingHref && (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none fixed inset-x-0 top-0 z-[95] h-0.5 overflow-hidden"
+        >
+          <div className="ui-route-progress h-full w-full bg-indigo-500" />
         </div>
       )}
 
-      {/* Main Content */}
+      {/* Desktop rail */}
+      <aside
+        className="sticky top-0 hidden h-screen w-68 shrink-0 flex-col lg:flex"
+        style={{ backgroundColor: 'var(--rail-bg)' }}
+      >
+        {renderSidebarInner(false)}
+      </aside>
+
+      {/* Mobile drawer */}
+      {mobileOpen && (
+        <div className="ui-overlay fixed inset-0 z-50 flex lg:hidden">
+          <aside
+            role="dialog"
+            aria-modal="true"
+            aria-label="Menu điều hướng"
+            className="ui-drawer relative z-10 flex h-full w-[min(20rem,86vw)] flex-col shadow-2xl"
+            style={{ backgroundColor: 'var(--rail-bg)' }}
+          >
+            {renderSidebarInner(true)}
+          </aside>
+          <button
+            type="button"
+            aria-label="Đóng menu"
+            tabIndex={-1}
+            className="fixed inset-0 bg-slate-950/50 active:scale-100"
+            onClick={() => setMobileOpen(false)}
+          />
+        </div>
+      )}
+
       <div className="flex min-w-0 flex-1 flex-col">
-        {/* Mobile Top Bar */}
-        <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-slate-200/80 bg-white/95 px-4 backdrop-blur-md lg:hidden">
+        {/* Mobile top bar */}
+        <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-slate-200 bg-white/90 px-2 backdrop-blur-md lg:hidden">
           <button
             type="button"
             onClick={() => setMobileOpen(true)}
-            className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700"
+            aria-label="Mở menu"
+            className="flex h-11 w-11 items-center justify-center rounded-xl text-slate-700 transition-colors hover:bg-slate-100"
           >
-            Menu
+            <Menu aria-hidden="true" className="h-5 w-5" />
           </button>
-          <Link href="/overview" className="flex items-center gap-2">
-            <img
-              src="/logo.png"
-              alt="INNOVARD"
-              className="h-7 w-7 rounded-lg object-cover shadow-2xs ring-1 ring-slate-200/80"
-            />
-            <span className="text-sm font-extrabold tracking-tight text-slate-900">
-              INNOVARD · {currentTeam.id ? currentTeam.name : 'Chưa có đội'}
+          <Link
+            href="/overview"
+            onClick={() => handleLinkClick('/overview')}
+            className="flex min-w-0 flex-1 items-center gap-2"
+          >
+            <img src="/logo.png" alt="" className="h-7 w-7 rounded-lg object-cover" />
+            <span className="truncate text-sm font-bold tracking-tight text-slate-900">
+              {currentTeam.id ? currentTeam.name : 'INNOVARD'}
             </span>
           </Link>
-          <Link href="/profile">
-            <UserAvatar
-              src={currentUser.avatarUrl}
-              name={currentUser.name}
-              size="sm"
-            />
+          <button
+            type="button"
+            onClick={() => setPaletteOpen(true)}
+            aria-label="Tìm kiếm"
+            className="flex h-11 w-11 items-center justify-center rounded-xl text-slate-700 transition-colors hover:bg-slate-100"
+          >
+            <Search aria-hidden="true" className="h-5 w-5" />
+          </button>
+          <Link
+            href="/profile"
+            onClick={() => handleLinkClick('/profile')}
+            aria-label="Hồ sơ của tôi"
+            className="flex h-11 w-11 items-center justify-center"
+          >
+            <UserAvatar src={currentUser.avatarUrl} name={currentUser.name} size="sm" />
           </Link>
         </header>
 
-        <main className="mx-auto w-full max-w-6xl flex-1 p-5 sm:p-8 lg:p-10">
-          {children}
+        <main className="mx-auto w-full max-w-6xl flex-1 p-5 pb-28 sm:p-8 sm:pb-28 lg:p-10">
+          <div key={pathname} className="ui-page">
+            {children}
+          </div>
         </main>
+
+        {/* Mobile tab bar: Fitts's law, thumb reach */}
+        <nav
+          aria-label="Điều hướng nhanh"
+          className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md lg:hidden"
+        >
+          <ul className="mx-auto grid max-w-md grid-cols-4">
+            {MOBILE_TABS.map((tab) => {
+              const isActive = isNavItemActive(tab.href, pathname);
+              const Icon = tab.icon;
+              return (
+                <li key={tab.href}>
+                  <Link
+                    href={tab.href}
+                    onClick={() => handleLinkClick(tab.href)}
+                    aria-current={isActive ? 'page' : undefined}
+                    className={`group flex h-16 flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors ${
+                      isActive ? 'text-indigo-700' : 'text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    <span
+                      className={`flex h-7 w-12 items-center justify-center rounded-full transition-[background-color,transform] duration-200 ease-out group-active:scale-90 ${
+                        isActive ? 'bg-indigo-100' : ''
+                      }`}
+                    >
+                      <Icon aria-hidden="true" className="h-[18px] w-[18px]" />
+                    </span>
+                    {tab.label}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
       </div>
+
+      <CommandPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        items={visibleItems}
+        visitCounts={visitCounts}
+        onNavigate={navigate}
+        onStartTour={startTour}
+      />
 
       <OnboardingTour />
     </div>
